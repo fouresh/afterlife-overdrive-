@@ -38,17 +38,21 @@ pnpm --filter @ao/server dev                            # wrangler dev (API + DO
 ## Структура
 
 ```
-packages/shared   RNG (sfc32), dsin/dcos/datan2, BinWriter/BinReader, PlayerInput, константы
-packages/content  палитра, спрайты (пиксельные карты), paper-doll, тайлсеты, (M1) предметы/враги
-packages/procgen  Tile, DungeonFloor, генераторы биомов, (M1) граф комнат и валидатор
-packages/sim      Entities (SoA), step(), коллизии, игроки, (M1) бой/ИИ/лут
+packages/shared   RNG (sfc32), dsin/dcos/datan2, BinWriter/BinReader, PlayerInput, names (фильтр)
+packages/content  палитра, спрайты, paper-doll, тайлсеты, данные (оружие, броня, артефакты,
+                  аффиксы, враги, биомы, комнаты, хаб), zod-схемы, русские строки контента
+packages/procgen  Tile, DungeonFloor, BSP-крипта, роли комнат, наполнение, валидатор, хаб
+packages/sim      Entities (SoA), step(), бой/ИИ/лут; save.ts (схема сохранения v2),
+                  account.ts (операции хаба, итоги забега), economy.ts, progression.ts
 apps/client       Vite + Preact UI + Pixi рендер; src/game (host, renderer, atlas, tilemap,
-                  worldView, input), src/ui (экраны, контролы), src/core (ошибки, viewport, pwa),
-                  src/i18n, build/ (pwa-плагин, иконки, PNG-энкодер)
-apps/server       Worker: src/index.ts (роутинг), api.ts, room.ts (Durable Object),
-                  migrations/*.sql (D1), wrangler.jsonc (production + env.preview)
-scripts/          cf-deploy.mjs, check-bundle-size.mjs, sprite-sheet.ts, pr-preview-comment.cjs
-e2e/              Playwright smoke
+                  worldView, fx, input), src/ui (экраны; ui/game — герои, хаб, панели, забег),
+                  src/state (IndexedDB, синхронизация аккаунта), src/audio (процедурные звуки),
+                  src/core (ошибки, viewport, pwa), src/i18n, build/ (pwa-плагин, иконки, PNG)
+apps/server       Worker: src/index.ts, api.ts (аккаунт, сохранения, runs), crypto.ts,
+                  room.ts (Durable Object), migrations/*.sql (D1), test/ (API на node:sqlite),
+                  wrangler.jsonc (production + env.preview)
+scripts/          cf-deploy.mjs, check-bundle-size.mjs, sprite-sheet.ts, floor-map.ts
+e2e/              Playwright: smoke (герой → хаб → данж → бой), screens (тур со скриншотами)
 docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 ```
 
@@ -68,7 +72,10 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 - Новый спрайт → добавить в реестр (`packages/content/src/registry.ts`), тест проверит размеры.
 - Бюджет бандла — `bundle-budget.json`; меню/редкие экраны грузить через `import()`.
 - Тест-хуки: `window.__AO__ = { screen, state() }`; с `?e2e=1` ещё `enterCombat()`, `grant()`,
-  `finishFloor()` и бессмертие игрока. `?seed=N` фиксирует seed забега, `?debug=1` — оверлей.
+  `finishFloor()`, `talk(stationId)` и бессмертие игрока. `?seed=N` фиксирует seed забега,
+  `?debug=1` — оверлей. Хелперы e2e — `e2e/helpers.ts` (`createHero`, `enterDungeon`).
+- Python-замены в файлах после Prettier часто молча не срабатывают (переносы строк) —
+  проверяйте `assert old in s` или используйте Edit.
 - Скриншоты экранов: `e2e/screens.spec.ts` пишет `test-results/**/0N-*.png`.
 
 ## Как добавлять контент (без правок движка)
@@ -94,11 +101,12 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 
 ## Состояние (обновлять в конце сессии)
 
-- **Готово:** M0 (ветка `m0-foundation`, PR #1), M1 (ветка `m1-solo-run`, PR #2).
+- **Готово:** M0 (`m0-foundation`, PR #1), M1 (`m1-solo-run`, PR #2), M2 (`m2-character-hub`, PR #3).
+  Ветки цепочкой: каждая следующая сделана от предыдущей.
 - **GitHub Actions в репозитории не стартуют** (startup_failure даже у пустого workflow) —
   проблема настроек/биллинга аккаунта владельца, описано в PR #1. Пока проверяем всё локально.
-- **Дальше:** M2 — персонаж и хаб: создатель персонажа (paper-doll уже есть), интро,
-  хаб (склад, кузница, рынок, прокачка, портал), облачные сохранения + код восстановления.
-  Профиль M1 (`localStorage` `ao.profile.v1`) нужно мигрировать.
+- **Дальше:** M3 — мультиплеер: RoomDO (каркас есть), бинарный протокол в `@ao/shared`,
+  комнаты из хаба (код/ссылка `?room=`), сервер-авторитет 30 Гц с тем же `step()`,
+  предсказание/интерполяция, переподключение. Затем M4 (лес, сюжет главы 1).
 - **Известные ограничения:** документация Cloudflare (developers.cloudflare.com) не открывается
   из облачной сессии — лимиты сверены через веб-поиск (октябрь 2026).
