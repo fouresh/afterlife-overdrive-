@@ -85,6 +85,10 @@ export interface DungeonFloor {
   spawns: SpawnInfo[];
   /** Player spawn in tile coordinates. */
   start: { x: number; y: number };
+  /** Index of the room that drops the key (cleared → key appears), -1 if none. */
+  keyRoom: number;
+  /** Index of the last room (miniboss with stairs, or the boss). */
+  lastRoom: number;
 }
 
 export function tileAt(f: { w: number; h: number; tiles: Uint8Array }, x: number, y: number): Tile {

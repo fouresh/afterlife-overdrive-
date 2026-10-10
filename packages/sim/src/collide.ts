@@ -31,6 +31,41 @@ export function moveBox(
   mask: number,
   out: { x: number; y: number },
 ): number {
+  // Sub-step large moves so fast bodies cannot tunnel through 1-tile walls.
+  const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 6);
+  if (steps > 1) {
+    let hit = 0;
+    let cx = x;
+    let cy = y;
+    for (let s = 0; s < steps; s++) {
+      hit |= moveBoxStep(
+        m,
+        cx,
+        cy,
+        r,
+        hit & 1 ? 0 : dx / steps,
+        hit & 2 ? 0 : dy / steps,
+        mask,
+        out,
+      );
+      cx = out.x;
+      cy = out.y;
+    }
+    return hit;
+  }
+  return moveBoxStep(m, x, y, r, dx, dy, mask, out);
+}
+
+function moveBoxStep(
+  m: CollisionMap,
+  x: number,
+  y: number,
+  r: number,
+  dx: number,
+  dy: number,
+  mask: number,
+  out: { x: number; y: number },
+): number {
   let hit = 0;
   // X axis
   let nx = x + dx;

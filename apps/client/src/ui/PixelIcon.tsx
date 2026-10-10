@@ -4,8 +4,8 @@ const PAL: Record<string, string> = {
   w: '#a3a1bd',
   R: '#cf4440',
   r: '#f08b5c',
+  g: '#875934',
   G: '#f2c94c',
-  g: '#c08427',
   B: '#3d84d1',
   C: '#36c4b4',
   c: '#aaf6ec',
@@ -71,6 +71,15 @@ WccWcccccW.
 .VVVVVVV.
 ..VVVVV..
 ...VVV...`,
+  bag: `
+...WWW.....
+..W...W....
+.WWWWWWWW..
+.WggggggW..
+.WgGGGGgW..
+.WggggggW..
+.WggggggW..
+.WWWWWWWW..`,
   phone: `
 ..KKKKKKK..
 ..KWWWWWK..

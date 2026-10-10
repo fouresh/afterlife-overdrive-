@@ -68,7 +68,7 @@ export function blitSprite(
 export function rasterize(def: SpriteDef, frame: number, slots?: SlotColors): RgbaImage {
   const img = createImage(def.w, def.h);
   blitSprite(img, def, frame, 0, 0, slots);
-  return img;
+  return def.outline ? outline(img, '#1b1325') : img;
 }
 
 /** Copy of an image where every opaque pixel becomes white (hit flash). */

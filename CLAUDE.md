@@ -25,6 +25,7 @@ pnpm check              # lint + format:check + typecheck + test + build + size
 pnpm test               # Vitest (все пакеты)
 pnpm build && pnpm e2e  # Playwright smoke (mobile emulation) против vite preview
 pnpm sprites out.png    # нарисовать все спрайты в PNG (смотреть через Read)
+pnpm floor-map 42 2 f.png  # нарисовать сгенерированный этаж (seed, глубина) в PNG
 pnpm format             # Prettier --write
 node scripts/cf-deploy.mjs --env production --dry-run   # проверить бандл Worker'а
 pnpm --filter @ao/server dev                            # wrangler dev (API + DO + D1 локально)
@@ -66,7 +67,20 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
   `apps/client/src/assets/sprite-overrides/<id>.png` (кадры по горизонтали).
 - Новый спрайт → добавить в реестр (`packages/content/src/registry.ts`), тест проверит размеры.
 - Бюджет бандла — `bundle-budget.json`; меню/редкие экраны грузить через `import()`.
-- Тест-хук: `window.__AO__ = { screen, state() }` — для Playwright и отчётов.
+- Тест-хуки: `window.__AO__ = { screen, state() }`; с `?e2e=1` ещё `enterCombat()`, `grant()`,
+  `finishFloor()` и бессмертие игрока. `?seed=N` фиксирует seed забега, `?debug=1` — оверлей.
+- Скриншоты экранов: `e2e/screens.spec.ts` пишет `test-results/**/0N-*.png`.
+
+## Как добавлять контент (без правок движка)
+
+- Оружие: запись в `packages/content/src/data/weapons.ts` (архетип атаки + спрайт в руке из
+  `sprites/items.ts`). Снаряд — в `data/projectiles.ts`.
+- Броня: `data/armor.ts` (форма слоя paper-doll + материал из `MATERIALS`).
+- Артефакт: `data/artifacts.ts` — список эффектов; иконка — `rune(...)` в `sprites/items.ts`.
+- Враг: `data/enemies.ts` (движение + атаки) + спрайт в `sprites/enemies.ts` + добавить в пул
+  биома `data/biomes.ts`. Шаблон комнаты: `data/rooms.ts` (ASCII).
+- Русские названия: `packages/content/src/i18n/ru.ts`. Тест `content.test.ts` проверит
+  схемы, ссылки на спрайты/снаряды и наличие строк.
 - Комментарии — по делу, на английском в коде; документация — на русском.
 
 ## Деплой
@@ -80,7 +94,11 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 
 ## Состояние (обновлять в конце сессии)
 
-- **Готово:** M0 (ветка `m0-foundation`, PR #1).
-- **Дальше:** M1 — соло-забег (см. ROADMAP). Начинать с контент-схем и генератора крипты.
+- **Готово:** M0 (ветка `m0-foundation`, PR #1), M1 (ветка `m1-solo-run`, PR #2).
+- **GitHub Actions в репозитории не стартуют** (startup_failure даже у пустого workflow) —
+  проблема настроек/биллинга аккаунта владельца, описано в PR #1. Пока проверяем всё локально.
+- **Дальше:** M2 — персонаж и хаб: создатель персонажа (paper-doll уже есть), интро,
+  хаб (склад, кузница, рынок, прокачка, портал), облачные сохранения + код восстановления.
+  Профиль M1 (`localStorage` `ao.profile.v1`) нужно мигрировать.
 - **Известные ограничения:** документация Cloudflare (developers.cloudflare.com) не открывается
   из облачной сессии — лимиты сверены через веб-поиск (октябрь 2026).

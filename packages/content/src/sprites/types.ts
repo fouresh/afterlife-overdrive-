@@ -15,6 +15,8 @@ export interface SpriteDef {
   oy?: number;
   pal: Record<string, string>;
   frames: string[][];
+  /** Add a 1px ink outline around opaque pixels when rasterizing (keep a 1px empty border). */
+  outline?: boolean;
 }
 
 /** Turn a template literal into rows: trims each line and drops empty lines. */
@@ -31,9 +33,21 @@ export function sprite(
   h: number,
   pal: Record<string, string>,
   frames: string[],
-  pivot?: { ox?: number; oy?: number },
+  pivot?: { ox?: number; oy?: number; outline?: boolean },
 ): SpriteDef {
   return { id, w, h, pal, frames: frames.map(px), ...pivot };
+}
+
+/** Same as sprite() but outlined automatically (most characters and items). */
+export function outlined(
+  id: string,
+  w: number,
+  h: number,
+  pal: Record<string, string>,
+  frames: string[],
+  pivot?: { ox?: number; oy?: number },
+): SpriteDef {
+  return sprite(id, w, h, pal, frames, { ...pivot, outline: true });
 }
 
 /** Customization slots used by paper-doll layers. */

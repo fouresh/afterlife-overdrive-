@@ -2,3 +2,8 @@ export * from './palette';
 export * from './sprites';
 export * from './registry';
 export * from './tilesets';
+export * from './schema';
+export * from './content';
+export * from './data/affixes';
+export { STARTER_WEAPONS } from './data/weapons';
+export * from './i18n/ru';
