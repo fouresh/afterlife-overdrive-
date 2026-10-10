@@ -1,27 +1,39 @@
 import { useEffect, useState } from 'preact/hooks';
 import { applyUpdate, canInstall, onPwaChange, promptInstall, updateAvailable } from '../core/pwa';
 import { t } from '../i18n';
-import { loadProfile } from '../state/profile';
+import { kvGet } from '../state/db';
 
-export function MainMenu({ onPlay }: { onPlay: () => void }) {
+interface SaveSummary {
+  characters?: { name: string; level: number; dead: boolean; hardcore: boolean }[];
+}
+
+export function MainMenu({ onPlay, onSettings }: { onPlay: () => void; onSettings: () => void }) {
   const [, force] = useState(0);
+  const [summary, setSummary] = useState<SaveSummary | null>(null);
   useEffect(() => onPwaChange(() => force((n) => n + 1)), []);
-  const profile = loadProfile();
+  // Peek at the save without loading the game code (no validation needed for a label).
+  useEffect(() => {
+    void kvGet<SaveSummary>('save').then((s) => setSummary(s ?? null));
+  }, []);
+  const heroes = summary?.characters?.filter((c) => !c.dead) ?? [];
   return (
     <div class="screen menu" data-testid="main-menu">
       <h1 class="menu__title">
         AFTERLIFE <span>OVERDRIVE</span>
       </h1>
       <p class="menu__tag">{t('app.tagline')}</p>
-      {profile && (
+      {heroes.length > 0 && (
         <div class="menu__profile" data-testid="profile-line">
-          Забегов: {profile.runs} · побед: {profile.victories} · лучший этаж: {profile.bestDepth} ·
-          золото: {profile.gold} · на складе: {profile.stash.length}
+          Героев: {heroes.length} ·{' '}
+          {heroes.map((h) => `${h.hardcore ? '☠' : ''}${h.name} (${h.level})`).join(', ')}
         </div>
       )}
       <div class="menu__buttons">
         <button class="btn btn--primary" data-testid="btn-play" onClick={onPlay}>
           {t('menu.play')}
+        </button>
+        <button class="btn" data-testid="btn-settings" onClick={onSettings}>
+          {t('menu.settings')}
         </button>
         {updateAvailable() && (
           <button class="btn" onClick={applyUpdate}>

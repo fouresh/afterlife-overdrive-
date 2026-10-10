@@ -19,7 +19,7 @@ import { EF, Kind, PickupKind, PropKind, Team } from './entities';
 import { Ev } from './events';
 import { itemBase, levelScale, type ItemInstance } from './items';
 import { spawnAlly, spawnArea, spawnPickup, spawnProjectile } from './spawn';
-import { computeStats, emptyLoadout, type Loadout } from './stats';
+import { emptyLoadout, type Loadout } from './stats';
 import {
   BAG_SIZE,
   DASH_IFRAMES,
@@ -29,8 +29,11 @@ import {
   MAX_POTIONS,
   PLAYER_RADIUS,
   PLAYER_SPEED,
+  defaultProgress,
   recomputeStats,
+  statsFor,
   tileCenter,
+  type Progress,
   type SimPlayer,
   type World,
 } from './world';
@@ -45,6 +48,9 @@ export interface PlayerSetup {
   dropCount?: number;
   xp?: number;
   kills?: number;
+  progress?: Progress;
+  killsBy?: Record<string, number>;
+  chests?: number;
 }
 
 export function addPlayer(w: World, setup: PlayerSetup = {}): SimPlayer {
@@ -53,7 +59,8 @@ export function addPlayer(w: World, setup: PlayerSetup = {}): SimPlayer {
   const y = tileCenter(w.floor.start.y) + (index >> 1) * 10;
   const ent = w.e.spawn(Kind.Player, x, y);
   const loadout = setup.loadout ?? emptyLoadout();
-  const stats = computeStats(loadout);
+  const progress = setup.progress ?? defaultProgress();
+  const stats = statsFor(loadout, progress);
   w.e.team[ent] = Team.Players;
   w.e.r[ent] = PLAYER_RADIUS;
   w.e.maxHp[ent] = stats.maxHp;
@@ -63,6 +70,9 @@ export function addPlayer(w: World, setup: PlayerSetup = {}): SimPlayer {
   const p: SimPlayer = {
     index,
     ent,
+    progress,
+    killsBy: setup.killsBy ?? {},
+    chests: setup.chests ?? 0,
     input: emptyInput(),
     prevButtons: 0,
     loadout,
@@ -509,7 +519,7 @@ function useSkill(w: World, p: SimPlayer, slot: 0 | 1, target: number): void {
   w.events.push(Ev.Skill, x, y, p.index, slot, def.color);
 }
 
-const INTERACT_RANGE = 20;
+const INTERACT_RANGE = 22;
 
 function updateInteract(w: World, p: SimPlayer): void {
   const e = w.e;
@@ -603,6 +613,7 @@ function interact(w: World, p: SimPlayer, j: number): void {
   const kind = e.def[j];
   if (kind === PropKind.Chest) {
     e.state[j] = 1;
+    for (const q of w.players) if (!q.dead) q.chests++;
     w.events.push(Ev.ChestOpen, e.x[j]!, e.y[j]!, j);
     const quality = e.ref[j]!;
     for (const q of w.players) {
@@ -623,6 +634,8 @@ function interact(w: World, p: SimPlayer, j: number): void {
   } else if (kind === PropKind.Portal) {
     w.outcome = 'victory';
     w.events.push(Ev.FloorExit, e.x[j]!, e.y[j]!, p.index, 1);
+  } else if (kind === PropKind.Station) {
+    w.events.push(Ev.Talk, e.x[j]!, e.y[j]!, e.ref[j]!, p.index);
   } else if (kind === PropKind.Shop) {
     const slot = w.shop[e.ref[j]!];
     if (!slot || slot.sold) return;

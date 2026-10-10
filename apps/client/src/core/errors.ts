@@ -53,7 +53,7 @@ export function showFatalError(err: Error): void {
     <div class="fatal__box">
       <h1 class="fatal__title">Что-то пошло не так</h1>
       <p class="fatal__msg"></p>
-      <p class="fatal__hint">Нажмите «Скопировать отчёт» и вставьте его в сессию Claude.</p>
+      <p class="fatal__hint">Нажмите "Скопировать отчёт" и вставьте его в сессию Claude.</p>
       <textarea class="fatal__report" readonly></textarea>
       <div class="fatal__actions">
         <button class="btn btn--primary" data-act="copy">Скопировать отчёт</button>

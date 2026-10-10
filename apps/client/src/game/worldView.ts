@@ -1,4 +1,10 @@
-import { CHAR_ANIMS, RARITY_COLORS, getContent, type TilesetDef } from '@ao/content';
+import {
+  CHAR_ANIMS,
+  RARITY_COLORS,
+  getContent,
+  type HubStation,
+  type TilesetDef,
+} from '@ao/content';
 import { Tile } from '@ao/procgen';
 import { TILE } from '@ao/shared';
 import { EF, ES, Ev, Kind, PickupKind, PropKind, itemBase, type World } from '@ao/sim';
@@ -31,6 +37,7 @@ export interface ViewHooks {
   hitStop(sec: number): void;
   toast(text: string, kind?: 'info' | 'warn' | 'good'): void;
   hurtFlash(): void;
+  talk(station: number): void;
 }
 
 /**
@@ -51,6 +58,8 @@ export class WorldView {
     private fx: Fx,
     private world: World,
     private playerSheet: (index: number) => AtlasEntry,
+    private npcSheet: (station: number) => AtlasEntry | null,
+    private stations: HubStation[],
     private hooks: ViewHooks,
     tileset: TilesetDef,
   ) {
@@ -188,7 +197,22 @@ export class WorldView {
           glow.scale.set(1.2);
           this.r.glowLayer.addChild(glow);
         } else if (k === PropKind.Spikes) entry = this.atlas.get('crypt.spikes');
-        else entry = this.atlas.get('fx.white');
+        else if (k === PropKind.Station) {
+          const st = this.stations[e.ref[i]!];
+          entry = this.atlas.get(st?.object ?? 'fx.white');
+          const npc = this.npcSheet(e.ref[i]!);
+          if (npc) {
+            extra = makeSprite(npc);
+            extra.position.set(-16, 6);
+            root.addChild(extra);
+          }
+          if (st?.id === 'portal' || st?.id === 'altar') {
+            glow = makeSprite(this.atlas.get('fx.glow'));
+            glow.tint = 0x36c4b4;
+            glow.scale.set(st.id === 'portal' ? 1.2 : 0.8);
+            this.r.glowLayer.addChild(glow);
+          }
+        } else entry = this.atlas.get('fx.white');
         break;
       }
       case Kind.Area: {
@@ -459,6 +483,23 @@ export class WorldView {
         v.extra.visible = !slot?.sold;
         v.extra.y = -9 + Math.sin(this.time * 3 + i) * 1.5;
       }
+    } else if (k === PropKind.Station) {
+      const st = this.stations[e.ref[i]!];
+      if (v.entry.frames.length > 1)
+        v.body.texture = v.entry.frames[Math.floor(this.time * 3) % v.entry.frames.length]!;
+      if (v.extra && st?.npc) {
+        const frames = CHAR_ANIMS.idle;
+        const npc = this.npcSheet(e.ref[i]!);
+        if (npc)
+          v.extra.texture = npc.frames[frames[Math.floor(this.time * 2 + i) % frames.length]!]!;
+      }
+      if (st?.id === 'portal') {
+        v.body.rotation = this.time * 0.8;
+        v.body.y = -6;
+      }
+      v.glow?.position.set(Math.round(x), Math.round(y - (st?.id === 'altar' ? 18 : 6)));
+      if (st?.id === 'portal' && Math.random() < 0.4)
+        this.fx.mote(x + (Math.random() - 0.5) * 20, y - 6, 0x36c4b4, 0.6);
     } else if (k === PropKind.Portal) {
       v.body.rotation = this.time * 0.8;
       v.body.y = -6;
@@ -680,6 +721,12 @@ export class WorldView {
           break;
         case Ev.Coin:
           if (a === 0) sfx.play('coin', { vol: b < 0 ? 1 : 0.6 });
+          break;
+        case Ev.Talk:
+          if (b === 0) {
+            sfx.play('ui', { pitch: 1.2 });
+            this.hooks.talk(a);
+          }
           break;
         case Ev.Trap:
           sfx.play('trap', { vol: 0.4 });

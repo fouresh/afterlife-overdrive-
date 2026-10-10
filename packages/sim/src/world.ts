@@ -7,6 +7,7 @@ import { EventBuffer } from './events';
 import { FlowField } from './flow';
 import type { ItemInstance } from './items';
 import { SpatialHash } from './spatial';
+import { characterBonus, type Attributes } from './progression';
 import { computeStats, type Loadout, type PlayerStats } from './stats';
 
 export interface Buff {
@@ -17,9 +18,21 @@ export interface Buff {
   color: number;
 }
 
+/** Character progression that affects stats (level, attributes, origin, elixir). */
+export interface Progress {
+  level: number;
+  attrs: Attributes;
+  origin: string;
+  elixir: string | null;
+}
+
 export interface SimPlayer {
   index: number;
   ent: number;
+  progress: Progress;
+  /** Kills per enemy id (contracts) and chests opened during the run. */
+  killsBy: Record<string, number>;
+  chests: number;
   input: PlayerInput;
   prevButtons: number;
   loadout: Loadout;
@@ -115,10 +128,14 @@ export interface World {
   keys: number;
   stairsOpen: boolean;
   bossEnt: number;
+  bossKilled: boolean;
   outcome: Outcome;
   /** Difficulty multipliers (depth + player count). */
   enemyHpMul: number;
   enemyDmgMul: number;
+  /** Difficulty loot modifiers. */
+  lootBoost: number;
+  itemLevelBonus: number;
   /** Total seconds spent (for summaries). */
   ticksPlayed: number;
 }
@@ -180,9 +197,12 @@ export function createWorld(
     keys: 0,
     stairsOpen: false,
     bossEnt: -1,
+    bossKilled: false,
     outcome: 'playing',
     enemyHpMul: (1 + 0.3 * depth) * (1 + 0.6 * (pc - 1)),
     enemyDmgMul: (1 + 0.15 * depth) * (1 + 0.1 * (pc - 1)),
+    lootBoost: 0,
+    itemLevelBonus: 0,
     ticksPlayed: 0,
   };
 }
@@ -195,9 +215,17 @@ export function tileCenter(t: number): number {
 export function recomputeStats(w: World, p: SimPlayer): void {
   const e = w.e;
   const frac = e.maxHp[p.ent]! > 0 ? e.hp[p.ent]! / e.maxHp[p.ent]! : 1;
-  p.stats = computeStats(p.loadout);
+  p.stats = statsFor(p.loadout, p.progress);
   e.maxHp[p.ent] = p.stats.maxHp;
   e.hp[p.ent] = Math.max(1, Math.round(p.stats.maxHp * frac));
   p.dashCharges = Math.min(p.dashCharges, p.stats.dashCharges);
   p.lookVersion++;
+}
+
+export function statsFor(loadout: Loadout, pr: Progress): PlayerStats {
+  return computeStats(loadout, characterBonus(pr.level, pr.attrs, loadout, pr.origin, pr.elixir));
+}
+
+export function defaultProgress(): Progress {
+  return { level: 1, attrs: { str: 0, dex: 0, int: 0, vit: 0 }, origin: '', elixir: null };
 }

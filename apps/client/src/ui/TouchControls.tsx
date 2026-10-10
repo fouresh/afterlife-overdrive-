@@ -22,7 +22,7 @@ function capture(el: Element, id: number): void {
  * InputManager: no Preact re-render per touch move. Button decorations (cooldowns, icons)
  * follow the HUD state.
  */
-export function TouchControls({ host }: { host: GameHost }) {
+export function TouchControls({ host, hubMode }: { host: GameHost; hubMode?: boolean }) {
   const input = host.input;
   const hud = useHud(host);
   const zone = useRef<HTMLDivElement>(null);
@@ -112,67 +112,81 @@ export function TouchControls({ host }: { host: GameHost }) {
           {hud.interact.label}
         </div>
       )}
-      <div class="cbtns">
-        <ActionButton
-          input={input}
-          bit={Btn.Attack}
-          cls="attack"
-          icon="sword"
-          label="controls.attack"
-        />
-        <ActionButton
-          input={input}
-          bit={Btn.Dash}
-          cls="dash"
-          icon="dash"
-          label="controls.dash"
-          cd={1 - hud.dashReady}
-        />
-        <ActionButton
-          input={input}
-          bit={Btn.Skill1}
-          cls="skill1"
-          icon="orb"
-          img={skillImg(0)}
-          label="controls.skill1"
-          cd={hud.skills[0].cd}
-          off={!hud.skills[0].icon}
-        />
-        <ActionButton
-          input={input}
-          bit={Btn.Skill2}
-          cls="skill2"
-          icon="orb"
-          img={skillImg(1)}
-          label="controls.skill2"
-          cd={hud.skills[1].cd}
-          off={!hud.skills[1].icon}
-        />
-        <ActionButton
-          input={input}
-          bit={Btn.Potion}
-          cls="potion"
-          icon="potion"
-          label="controls.potion"
-          badge={hud.potions}
-          off={hud.potions === 0}
-        />
-        <ActionButton
-          input={input}
-          bit={Btn.Interact}
-          cls="interact"
-          icon="hand"
-          label="controls.interact"
-          ready={!!hud.interact}
-          off={!hud.interact}
-        />
+      <div class={`cbtns${hubMode ? ' cbtns--hub' : ''}`}>
+        {hubMode ? (
+          <ActionButton
+            input={input}
+            bit={Btn.Interact}
+            cls="interact"
+            icon="hand"
+            label="controls.interact"
+            ready={!!hud.interact}
+            off={!hud.interact}
+          />
+        ) : (
+          <>
+            <ActionButton
+              input={input}
+              bit={Btn.Attack}
+              cls="attack"
+              icon="sword"
+              label="controls.attack"
+            />
+            <ActionButton
+              input={input}
+              bit={Btn.Dash}
+              cls="dash"
+              icon="dash"
+              label="controls.dash"
+              cd={1 - hud.dashReady}
+            />
+            <ActionButton
+              input={input}
+              bit={Btn.Skill1}
+              cls="skill1"
+              icon="orb"
+              img={skillImg(0)}
+              label="controls.skill1"
+              cd={hud.skills[0].cd}
+              off={!hud.skills[0].icon}
+            />
+            <ActionButton
+              input={input}
+              bit={Btn.Skill2}
+              cls="skill2"
+              icon="orb"
+              img={skillImg(1)}
+              label="controls.skill2"
+              cd={hud.skills[1].cd}
+              off={!hud.skills[1].icon}
+            />
+            <ActionButton
+              input={input}
+              bit={Btn.Potion}
+              cls="potion"
+              icon="potion"
+              label="controls.potion"
+              badge={hud.potions}
+              off={hud.potions === 0}
+            />
+            <ActionButton
+              input={input}
+              bit={Btn.Interact}
+              cls="interact"
+              icon="hand"
+              label="controls.interact"
+              ready={!!hud.interact}
+              off={!hud.interact}
+            />
+          </>
+        )}
       </div>
     </div>
   );
 }
 
 /** PC: compact bar with artifact cooldowns and hotkeys. */
-export function DesktopBar({ host }: { host: GameHost }) {
+export function DesktopBar({ host, hubMode }: { host: GameHost; hubMode?: boolean }) {
   const hud = useHud(host);
   const slot = (s: 0 | 1, key: string) => (
     <div class="dbar__slot">
@@ -192,15 +206,20 @@ export function DesktopBar({ host }: { host: GameHost }) {
           F — {hud.interact.label}
         </div>
       )}
-      <div class="dbar__row">
-        {slot(0, 'Q')}
-        {slot(1, 'E')}
-        <div class="dbar__slot">
-          <PixelIcon name="potion" />
-          <kbd>R ×{hud.potions}</kbd>
+      {!hubMode && (
+        <div class="dbar__row">
+          {slot(0, 'Q')}
+          {slot(1, 'E')}
+          <div class="dbar__slot">
+            <PixelIcon name="potion" />
+            <kbd>R ×{hud.potions}</kbd>
+          </div>
+          <span class="dbar__hint">
+            WASD · мышь · ЛКМ атака · Пробел рывок · I сумка · Esc пауза
+          </span>
         </div>
-        <span class="dbar__hint">WASD · мышь · ЛКМ атака · Пробел рывок · I сумка · Esc пауза</span>
-      </div>
+      )}
+      {hubMode && <span class="dbar__hint">WASD — ходить · F — говорить · Esc — меню</span>}
     </div>
   );
 }

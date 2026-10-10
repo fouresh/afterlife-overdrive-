@@ -43,7 +43,8 @@ export type PropKind =
   | 'stairs'
   | 'spikes'
   | 'shop'
-  | 'vase';
+  | 'vase'
+  | 'station';
 
 export interface PropInfo {
   kind: PropKind;

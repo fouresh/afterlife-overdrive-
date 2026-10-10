@@ -1,11 +1,12 @@
 import { ENEMY_SPRITES } from './sprites/enemies';
+import { HUB_SPRITES } from './sprites/hub';
 import { ITEM_SPRITES } from './sprites/items';
 import { CRYPT_TILES } from './sprites/tiles-crypt';
 import type { SpriteDef } from './sprites/types';
 
 /** Every static sprite that goes into the texture atlas. */
 export function allSprites(): SpriteDef[] {
-  return [...CRYPT_TILES, ...ENEMY_SPRITES, ...ITEM_SPRITES];
+  return [...CRYPT_TILES, ...ENEMY_SPRITES, ...ITEM_SPRITES, ...HUB_SPRITES];
 }
 
 let byId: Map<string, SpriteDef> | undefined;

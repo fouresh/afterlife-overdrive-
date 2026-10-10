@@ -18,6 +18,9 @@ export function initFloorEntities(w: World): void {
       case 'stairs':
         spawnProp(w, PropKind.Stairs, p.x, p.y, -1, p.room);
         break;
+      case 'station':
+        spawnProp(w, PropKind.Station, p.x, p.y, p.v ?? 0, p.room);
+        break;
       case 'spikes':
         spawnProp(w, PropKind.Spikes, p.x, p.y, (p.x * 7 + p.y * 3) % 24, p.room);
         break;
