@@ -1,0 +1,21 @@
+{
+  "name": "@ao/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ao/content": "workspace:*",
+    "@ao/procgen": "workspace:*",
+    "@ao/shared": "workspace:*",
+    "@ao/sim": "workspace:*",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "wrangler": "^4.40.0"
+  }
+}

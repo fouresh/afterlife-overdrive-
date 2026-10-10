@@ -1,0 +1,447 @@
+import { C } from '../palette';
+import { sprite } from './types';
+
+/** Crypt tileset (16×16). Keys 0-4 = stone ramp so the whole set reads as one material. */
+const stone = { '0': C.stone0, '1': C.stone1, '2': C.stone2, '3': C.stone3, '4': C.stone4 };
+const T = 16;
+
+export const cryptFloor = sprite('crypt.floor', T, T, { ...stone, m: C.moss1, b: C.bone1 }, [
+  `
+  1111111011111111
+  1111111011112111
+  1121111011111111
+  1111111011111111
+  1111111011111111
+  0000000000000000
+  1111011111111111
+  1111011111111111
+  1111011111211111
+  1211011111111111
+  1111011111111111
+  0000000000000000
+  1111111111011111
+  1111121111011111
+  1111111111011112
+  1111111111011111
+  `,
+  `
+  1111111011111111
+  1111111011111111
+  1111111011111111
+  1111111010111111
+  1112111001111111
+  0000000000000000
+  1111011111011111
+  1111011111101111
+  1111011111110111
+  1111011111111011
+  1111011111111111
+  0000000000000000
+  1111111111011111
+  1111111111011111
+  1121111111011111
+  1111111111011111
+  `,
+  `
+  1111111111111110
+  1211111111111110
+  1111111111111110
+  1111111111111110
+  1111112111111110
+  1111111111111110
+  1111111111111110
+  0000000000000000
+  1111111011111111
+  1111111011111111
+  1111111011111111
+  1112111011111121
+  1111111011111111
+  1111111011111111
+  1111111011111111
+  0000000000000000
+  `,
+  `
+  1111111011111111
+  1111111011111111
+  1mm11110111m1111
+  1m1m1110111mm111
+  111111101111m111
+  0000000000000000
+  1111011111111111
+  1111011111111111
+  1111011111111111
+  1111011111111m11
+  1111011111111mm1
+  0000000000000000
+  11111111110111m1
+  1111111111011111
+  1111111111011111
+  1111111111011111
+  `,
+]);
+
+export const cryptWallTop = sprite('crypt.wallTop', T, T, { n: C.ink, d: C.night, k: C.black }, [
+  `
+  nnnnnnnnnnnnnnnn
+  nnnnnnnnnnnnnnnn
+  nnndnnnnnnnnnnnn
+  nnnnnnnnnnnndnnn
+  nnnnnnnnnnnnnnnn
+  nnnnnnnnnnnnnnnn
+  nnnnnndnnnnnnnnn
+  nnnnnnnnnnnnnnnn
+  nnnnnnnnnnnnnnnn
+  nnnnnnnnnnnnndnn
+  nndnnnnnnnnnnnnn
+  nnnnnnnnnnnnnnnn
+  nnnnnnnndnnnnnnn
+  nnnnnnnnnnnnnnnn
+  nnnnnnnnnnnnnnnn
+  nnnnnnnnnnnnnnnn
+  `,
+]);
+
+export const cryptWallFace = sprite('crypt.wallFace', T, T, { ...stone, m: C.moss1, M: C.moss0 }, [
+  `
+  3333333333333333
+  2222222122222221
+  2222222122222221
+  1111111111111111
+  2221222222212222
+  2221222222212222
+  1111111111111111
+  2222222122222221
+  2222222122222221
+  1111111111111111
+  2221222222212222
+  2221222222212222
+  1111111111111111
+  2222222122222221
+  2222222122222221
+  0000000000000000
+  `,
+  `
+  3333333333333333
+  2222222122222221
+  22m2222122222221
+  1mm1111111111111
+  2m21222222212222
+  2221222222212222
+  1111111111111111
+  2222222122222m21
+  22222221222mmm21
+  111111111111M111
+  2221222222212222
+  2221222222212222
+  1111111111111111
+  2222222122222221
+  2222222122222221
+  0000000000000000
+  `,
+]);
+
+export const torch = sprite(
+  'crypt.torch',
+  T,
+  T,
+  { y: C.gold3, Y: C.gold2, r: C.red3, R: C.red2, w: C.wood2, k: C.stone0 },
+  [
+    `
+    ................
+    .......y........
+    ......yY........
+    ......YYy.......
+    .....rYYYr......
+    .....rRYRr......
+    ......RRR.......
+    .......w........
+    .......w........
+    ......kwk.......
+    ......kkk.......
+    ................
+    ................
+    ................
+    ................
+    ................
+    `,
+    `
+    ................
+    ........y.......
+    .......Yy.......
+    ......yYY.......
+    ......rYYr......
+    .....rRYRr......
+    ......RRR.......
+    .......w........
+    .......w........
+    ......kwk.......
+    ......kkk.......
+    ................
+    ................
+    ................
+    ................
+    ................
+    `,
+  ],
+  { ox: 8, oy: 8 },
+);
+
+export const doorBars = sprite(
+  'crypt.door',
+  T,
+  T,
+  { k: C.ink, s: C.stone3, S: C.stone4, d: C.stone1 },
+  [
+    `
+  kkkkkkkkkkkkkkkk
+  kSdkSdkSdkSdkSdk
+  ksdksdksdksdksdk
+  ksdksdksdksdksdk
+  kkkkkkkkkkkkkkkk
+  kSSSSSSSSSSSSSSk
+  ksdksdksdksdksdk
+  ksdksdksdksdksdk
+  ksdksdksdksdksdk
+  ksdksdksdksdksdk
+  kkkkkkkkkkkkkkkk
+  kSSSSSSSSSSSSSSk
+  ksdksdksdksdksdk
+  ksdksdksdksdksdk
+  ksdksdksdksdksdk
+  kkkkkkkkkkkkkkkk
+  `,
+  ],
+);
+
+export const doorLocked = sprite(
+  'crypt.doorLocked',
+  T,
+  T,
+  { k: C.ink, w: C.wood1, W: C.wood2, g: C.gold2, G: C.gold1, d: C.wood0 },
+  [
+    `
+    kkkkkkkkkkkkkkkk
+    kWWwdWWwdWWwdWWk
+    kWwwdWwwdWwwdWwk
+    kkkkkkkkkkkkkkkk
+    kWWwdWWwdWWwdWWk
+    kWwwdWwgggwwdWwk
+    kWwwdWwgkgwwdWwk
+    kWwwdWwgggwwdWwk
+    kWwwdWwwgwwwdWwk
+    kWwwdWwGgGwwdWwk
+    kkkkkkkkkkkkkkkk
+    kWWwdWWwdWWwdWWk
+    kWwwdWwwdWwwdWwk
+    kWwwdWwwdWwwdWwk
+    kWwwdWwwdWwwdWwk
+    kkkkkkkkkkkkkkkk
+    `,
+  ],
+);
+
+export const stairsDown = sprite('crypt.stairs', T, T, { ...stone, k: C.black }, [
+  `
+  3333333333333333
+  3kkkkkkkkkkkkkk3
+  3k222222222222k3
+  3k111111111111k3
+  3kkkkkkkkkkkkkk3
+  3k222222222222k3
+  3k111111111111k3
+  3kkkkkkkkkkkkkk3
+  3k222222222222k3
+  3k111111111111k3
+  3kkkkkkkkkkkkkk3
+  3k222222222222k3
+  3k000000000000k3
+  3kkkkkkkkkkkkkk3
+  3kkkkkkkkkkkkkk3
+  3333333333333333
+  `,
+]);
+
+export const spikes = sprite('crypt.spikes', T, T, { ...stone, s: C.stone4, k: C.ink }, [
+  `
+  1111111111111111
+  1000110001100011
+  1000110001100011
+  1111111111111111
+  1111111111111111
+  1000110001100011
+  1000110001100011
+  1111111111111111
+  1111111111111111
+  1000110001100011
+  1000110001100011
+  1111111111111111
+  1111111111111111
+  1000110001100011
+  1000110001100011
+  1111111111111111
+  `,
+  `
+  1111111111111111
+  1s0011s0011s0011
+  1s00s1s00s1s00s1
+  1k11k1k11k1k11k1
+  1111111111111111
+  1s0011s0011s0011
+  1s00s1s00s1s00s1
+  1k11k1k11k1k11k1
+  1111111111111111
+  1s0011s0011s0011
+  1s00s1s00s1s00s1
+  1k11k1k11k1k11k1
+  1111111111111111
+  1s0011s0011s0011
+  1s00s1s00s1s00s1
+  1k11k1k11k1k11k1
+  `,
+]);
+
+const decoPal = { b: C.bone1, B: C.bone2, d: C.bone0, k: C.ink, w: C.stone4, W: C.white };
+
+export const decoBones = sprite('crypt.bones', T, T, decoPal, [
+  `
+  ................
+  ................
+  ................
+  ..........B.....
+  .........Bbd....
+  ........Bbd.....
+  ..BB...Bbd......
+  ..BbbbBbd.......
+  ...dddbd........
+  ......d.........
+  ................
+  ...........BB...
+  ..........Bbbb..
+  ..........dddd..
+  ................
+  ................
+  `,
+]);
+
+export const decoSkull = sprite('crypt.skull', T, T, decoPal, [
+  `
+  ................
+  ................
+  ................
+  ................
+  ................
+  ................
+  ......BBBB......
+  .....BbbbbB.....
+  .....bkbbkb.....
+  .....bkbbkb.....
+  .....dbbbbd.....
+  ......bkkb......
+  ......dbbd......
+  ................
+  ................
+  ................
+  `,
+]);
+
+export const decoCobweb = sprite('crypt.cobweb', T, T, decoPal, [
+  `
+  wWwwwwwwwww.....
+  Ww...w....w.....
+  w.w..w...w......
+  w..w.w..w.......
+  w...wwww........
+  w...ww.w........
+  wwwww...........
+  w..w............
+  w.w.............
+  ww..............
+  w...............
+  ................
+  ................
+  ................
+  ................
+  ................
+  `,
+]);
+
+export const decoCrack = sprite('crypt.rubble', T, T, { ...stone }, [
+  `
+  ................
+  ................
+  ................
+  .....3..........
+  ....3220........
+  ....2210..3.....
+  .....00..320....
+  .........210....
+  ..32.....00.....
+  ..210...........
+  ..00.....32.....
+  .........210....
+  ..........0.....
+  ................
+  ................
+  ................
+  `,
+]);
+
+export const pillar = sprite(
+  'crypt.pillar',
+  T,
+  32,
+  { ...stone, k: C.ink },
+  [
+    `
+    ................
+    .00000000000000.
+    .43333333333332.
+    .33333333333331.
+    .00000000000000.
+    ..322222222220..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322122222210..
+    ..322222222220..
+    .00000000000000.
+    .43333333333332.
+    .33333333333331.
+    .22222222222220.
+    .00000000000000.
+    ................
+    ................
+    `,
+  ],
+  { ox: 8, oy: 30 },
+);
+
+export const CRYPT_TILES = [
+  cryptFloor,
+  cryptWallTop,
+  cryptWallFace,
+  torch,
+  doorBars,
+  doorLocked,
+  stairsDown,
+  spikes,
+  decoBones,
+  decoSkull,
+  decoCobweb,
+  decoCrack,
+  pillar,
+];

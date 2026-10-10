@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0d0a12" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Afterlife" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta
+      name="description"
+      content="Пиксельная кооперативная roguelite: смерть — только начало."
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>Afterlife Overdrive</title>
+    <style>
+      html,
+      body {
+        background: #0d0a12;
+        margin: 0;
+        height: 100%;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #a3a1bd;
+        font: 16px monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"><div id="boot">Загрузка…</div></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
