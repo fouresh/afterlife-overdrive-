@@ -2,8 +2,11 @@ import {
   allSprites,
   blitImage,
   createImage,
+  getContent,
+  materialSlots,
   rasterize,
   silhouette,
+  spriteById,
   type RgbaImage,
   type SpriteDef,
 } from '@ao/content';
@@ -85,7 +88,73 @@ const PROCEDURAL: {
       c.fillRect(0, 0, 4, 4);
     },
   },
+  {
+    // Melee slash crescent pointing right (rotated to the aim).
+    id: 'fx.slash',
+    w: 40,
+    h: 40,
+    draw: (c) => {
+      c.translate(20, 20);
+      for (let k = 0; k < 6; k++) {
+        c.beginPath();
+        c.strokeStyle = `rgba(255,255,255,${0.15 + k * 0.15})`;
+        c.lineWidth = 6 - k;
+        c.arc(-6, 0, 22 - k * 0.6, -1.05 + k * 0.05, 1.05 - k * 0.05);
+        c.stroke();
+      }
+    },
+  },
+  {
+    id: 'fx.ring',
+    w: 32,
+    h: 32,
+    draw: (c) => {
+      c.strokeStyle = '#fff';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(16, 16, 14.5, 0, Math.PI * 2);
+      c.stroke();
+    },
+  },
+  {
+    id: 'fx.disc',
+    w: 32,
+    h: 32,
+    draw: (c) => {
+      c.fillStyle = 'rgba(255,255,255,0.35)';
+      c.beginPath();
+      c.arc(16, 16, 15, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#fff';
+      c.lineWidth = 1.5;
+      c.stroke();
+    },
+  },
+  {
+    id: 'fx.beam',
+    w: 8,
+    h: 40,
+    draw: (c) => {
+      const g = c.createLinearGradient(0, 0, 0, 40);
+      g.addColorStop(0, 'rgba(255,255,255,0)');
+      g.addColorStop(1, 'rgba(255,255,255,0.8)');
+      c.fillStyle = g;
+      c.fillRect(2, 0, 4, 40);
+    },
+  },
 ];
+
+/** Item icons per base id (armor icons recolored by material). Ids: `item:<baseId>`. */
+function itemIconImages(): { id: string; def: SpriteDef; img: RgbaImage }[] {
+  const out: { id: string; def: SpriteDef; img: RgbaImage }[] = [];
+  for (const [id, base] of getContent().bases) {
+    const def = spriteById(base.def.icon);
+    if (!def) continue;
+    const slots = base.kind === 'armor' ? materialSlots(base.def.look.material) : undefined;
+    out.push({ id: `item:${id}`, def, img: rasterize(def, 0, slots) });
+  }
+  return out;
+}
 
 /**
  * One texture atlas for every static sprite (+ white "hit flash" variants), built at startup on a
@@ -119,6 +188,9 @@ export class Atlas {
       atlas.addImages(def.id, def.w, def.h, def.ox ?? def.w / 2, def.oy ?? def.h - 1, frames, true);
     }
     for (const p of PROCEDURAL) atlas.addProcedural(p.id, p.w, p.h, p.draw);
+    for (const ic of itemIconImages()) {
+      atlas.addImages(ic.id, ic.def.w, ic.def.h, ic.def.w / 2, ic.def.h / 2, [ic.img], false);
+    }
     atlas.source.update();
     return atlas;
   }
@@ -210,6 +282,26 @@ export class Atlas {
   has(id: string): boolean {
     return this.entries.has(id);
   }
+
+  /** PNG data URL of one frame (for DOM UI icons), scaled by an integer factor. Cached. */
+  dataUrl(id: string, frame = 0, scale = 3): string {
+    const key = `${id}#${frame}@${scale}`;
+    let url = this.urls.get(key);
+    if (url) return url;
+    const e = this.get(id);
+    const r = e.rects[frame % e.rects.length]!;
+    const c = document.createElement('canvas');
+    c.width = r.w * scale;
+    c.height = r.h * scale;
+    const ctx = c.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.canvas, r.x, r.y, r.w, r.h, 0, 0, r.w * scale, r.h * scale);
+    url = c.toDataURL();
+    this.urls.set(key, url);
+    return url;
+  }
+
+  private urls = new Map<string, string>();
 
   /** Draw a frame onto a 2D canvas (used to bake the static tilemap). */
   drawTo(c: CanvasRenderingContext2D, id: string, frame: number, dx: number, dy: number): void {

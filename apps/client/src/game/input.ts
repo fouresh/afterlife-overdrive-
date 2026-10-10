@@ -30,12 +30,18 @@ export class InputManager {
   private latched = 0;
   private detach: (() => void)[] = [];
   onPause?: () => void;
+  onInventory?: () => void;
 
   attach(canvas: HTMLCanvasElement): void {
     const down = (e: KeyboardEvent) => {
       if (e.repeat) return;
       if (e.code === 'Escape' || e.code === 'KeyP') {
         this.onPause?.();
+        return;
+      }
+      if (e.code === 'KeyI' || e.code === 'Tab') {
+        e.preventDefault();
+        this.onInventory?.();
         return;
       }
       this.keys.add(e.code);

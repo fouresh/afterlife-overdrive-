@@ -9,6 +9,8 @@ export const Kind = {
   Projectile: 3,
   Pickup: 4,
   Area: 5,
+  Prop: 6,
+  Ally: 7,
 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
@@ -19,18 +21,37 @@ export const Team = {
 } as const;
 
 export const EF = {
-  /** Ignores pits (bats, ghosts, projectiles). */
+  /** Ignores pits (bats, ghosts). */
   Flying: 1 << 0,
-  /** Passes through walls. */
+  /** Passes through walls (kept inside its room). */
   Phasing: 1 << 1,
   /** Cannot take damage. */
   Invulnerable: 1 << 2,
-  /** Pushes other bodies (enemies/players separate from each other). */
+  /** Takes part in body separation and contact checks. */
   Body: 1 << 3,
   /** Boss/miniboss (UI bar, knockback resistance). */
   Boss: 1 << 4,
-  /** Dead but kept for the death animation. */
+  /** Dead, playing the death animation; ignored by gameplay. */
   Dying: 1 << 5,
+  /** Spawned by a summon (does not count toward room waves twice). */
+  Summoned: 1 << 6,
+} as const;
+
+/** Prop kinds stored in `def` for Kind.Prop. */
+export const PropKind = {
+  Chest: 1,
+  Stairs: 2,
+  Shop: 3,
+  Portal: 4,
+  Spikes: 5,
+} as const;
+
+/** Pickup kinds stored in `def` for Kind.Pickup. */
+export const PickupKind = {
+  Gold: 1,
+  Item: 2,
+  Potion: 3,
+  Key: 4,
 } as const;
 
 export class Entities {
@@ -74,8 +95,8 @@ export class Entities {
   slowT: Int16Array;
   burnT: Int16Array;
   stunT: Int16Array;
-  /** Index into a per-kind side table (player index, attack slot, etc.). */
-  ref: Int16Array;
+  /** Index into a per-kind side table (player index, attack slot, drop index, …). */
+  ref: Int32Array;
   private freeList: Int32Array;
   private freeCount = 0;
 
@@ -116,11 +137,11 @@ export class Entities {
     this.slowT = new Int16Array(cap);
     this.burnT = new Int16Array(cap);
     this.stunT = new Int16Array(cap);
-    this.ref = new Int16Array(cap);
+    this.ref = new Int32Array(cap);
     this.freeList = new Int32Array(cap);
   }
 
-  /** Allocate an entity; returns -1 when full (callers must tolerate it, e.g. drop a particle). */
+  /** Allocate an entity; returns -1 when full (callers must tolerate it). */
   spawn(kind: Kind, x: number, y: number): number {
     let i: number;
     if (this.freeCount > 0) i = this.freeList[--this.freeCount]!;

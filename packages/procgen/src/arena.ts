@@ -96,6 +96,8 @@ export function parseAsciiFloor(src: string, seed = 1): DungeonFloor {
     props,
     spawns: [],
     start,
+    keyRoom: -1,
+    lastRoom: 0,
   };
 }
 
