@@ -86,12 +86,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      deployments: write
     concurrency:
       group: deploy-${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
       cancel-in-progress: false
-    environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
-      url: ${{ steps.deploy.outputs.url }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -110,6 +108,23 @@ jobs:
       - name: Deploy
         id: deploy
         run: node scripts/cf-deploy.mjs --env ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+      - name: Record GitHub deployment (link on the repo page)
+        if: steps.deploy.outputs.url != ''
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOY_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: dep } = await github.rest.repos.createDeployment({
+              owner, repo, ref: context.sha, environment: process.env.DEPLOY_ENV,
+              auto_merge: false, required_contexts: [], transient_environment: process.env.DEPLOY_ENV !== 'production',
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner, repo, deployment_id: dep.id, state: 'success', environment_url: process.env.DEPLOY_URL,
+            });
       - name: Comment preview link on the PR
         if: steps.deploy.outputs.url != '' && github.ref != 'refs/heads/main'
         uses: actions/github-script@v7
