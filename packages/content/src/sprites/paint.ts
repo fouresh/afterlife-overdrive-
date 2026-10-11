@@ -59,6 +59,7 @@ export class Pix {
   }
 
   set(x: number, y: number, c: string, o?: ShadeOpts): this {
+    if (c.length !== 1) throw new Error(`Pix.set: '${c}' is not one palette key`);
     x = Math.floor(x);
     y = Math.floor(y);
     if (!this.inside(x, y)) return this;

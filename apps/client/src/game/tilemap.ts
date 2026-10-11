@@ -79,10 +79,22 @@ export class TilemapView {
               if (t === Tile.Pit) {
                 c.fillStyle = ts.pit;
                 c.fillRect(dx, dy, TILE, TILE);
+                // Depth: a lit lip on top, the far wall falling into darkness below it,
+                // thin edges on the sides.
                 if (!isPitLike(tileAt(x, y - 1))) {
                   c.fillStyle = ts.pitEdge;
-                  c.fillRect(dx, dy, TILE, 2);
+                  c.fillRect(dx, dy, TILE, hair * 2);
+                  c.globalAlpha = 0.45;
+                  c.fillRect(dx, dy + hair * 2, TILE, hair * 3);
+                  c.globalAlpha = 0.2;
+                  c.fillRect(dx, dy + hair * 5, TILE, hair * 4);
+                  c.globalAlpha = 1;
                 }
+                c.globalAlpha = 0.5;
+                c.fillStyle = ts.pitEdge;
+                if (!isPitLike(tileAt(x - 1, y))) c.fillRect(dx, dy, hair, TILE);
+                if (!isPitLike(tileAt(x + 1, y))) c.fillRect(dx + TILE - hair, dy, hair, TILE);
+                c.globalAlpha = 1;
                 // A few glints (water in the forest, dust in the crypt).
                 c.fillStyle = ts.pitEdge;
                 c.globalAlpha = 0.35;

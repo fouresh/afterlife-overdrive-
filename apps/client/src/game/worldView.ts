@@ -1,5 +1,7 @@
 import {
   CHAR_ANIMS,
+  CHAR_ANIM_FPS,
+  CHAR_HANDS,
   RARITY_COLORS,
   contentRu,
   getContent,
@@ -8,12 +10,22 @@ import {
 } from '@ao/content';
 import { Tile } from '@ao/procgen';
 import { TILE } from '@ao/shared';
-import { EF, ES, Ev, Kind, PickupKind, PropKind, itemBase, type World } from '@ao/sim';
+import {
+  EF,
+  ES,
+  Ev,
+  Kind,
+  PLAYER_SPEED,
+  PickupKind,
+  PropKind,
+  itemBase,
+  type World,
+} from '@ao/sim';
 import { Container, Sprite } from 'pixi.js';
 import { sfx } from '../audio/sfx';
 import type { Atlas, AtlasEntry } from './atlas';
 import type { Fx } from './fx';
-import { makeSprite, type Renderer } from './renderer';
+import { makeSprite, snap, type Renderer } from './renderer';
 
 interface View {
   gen: number;
@@ -28,6 +40,31 @@ interface View {
   /** Id of the weapon sprite currently shown (players). */
   weaponId?: string;
   look?: number;
+  /** Animation phase in frames (advanced by speed, so feet do not slide). */
+  phase: number;
+  /** Smoothed facing (-1 left … 1 right): turning squeezes the sprite through its middle. */
+  face: number;
+}
+
+/** Turn time in seconds for a full left↔right flip. */
+const TURN_TIME = 0.09;
+/** Creatures that keep moving when standing still (no legs to freeze). */
+const IDLE_ANIMATED = new Set([
+  'en.slime',
+  'en.bat',
+  'en.ghost',
+  'en.cultist',
+  'en.cryptWarden',
+  'en.sporeling',
+]);
+
+function approach(v: number, target: number, step: number): number {
+  return v < target ? Math.min(target, v + step) : Math.max(target, v - step);
+}
+
+function easeOutCubic(t: number): number {
+  const u = 1 - Math.min(1, Math.max(0, t));
+  return 1 - u * u * u;
 }
 
 const hexNum = (h: string) => parseInt(h.slice(1), 16);
@@ -258,7 +295,20 @@ export class WorldView {
     }
     const isFloor = kind === Kind.Area || (kind === Kind.Prop && e.def[i] === PropKind.Spikes);
     (isFloor ? this.r.decalLayer : layer).addChild(root);
-    return { gen: e.gen[i]!, kind, root, body, shadow, glow, extra, weapon, entry };
+    const face = Math.abs(e.face[i]!) > Math.PI / 2 ? -1 : 1;
+    return {
+      gen: e.gen[i]!,
+      kind,
+      root,
+      body,
+      shadow,
+      glow,
+      extra,
+      weapon,
+      entry,
+      phase: i * 0.37,
+      face,
+    };
   }
 
   /**
@@ -313,14 +363,15 @@ export class WorldView {
       }
       const x = e.px[i]! + (e.x[i]! - e.px[i]!) * alpha;
       const y = e.py[i]! + (e.y[i]! - e.py[i]!) * alpha;
-      v.root.position.set(Math.round(x), Math.round(y));
+      // Texel grid (half a world pixel): smoother motion than whole-pixel steps.
+      v.root.position.set(snap(x), snap(y));
       v.root.zIndex = y;
       switch (v.kind) {
         case Kind.Player:
-          this.animatePlayer(i, v);
+          this.animatePlayer(i, v, dt);
           break;
         case Kind.Enemy:
-          this.animateEnemy(i, v);
+          this.animateEnemy(i, v, dt);
           break;
         case Kind.Projectile:
           this.animateProjectile(i, v, x, y);
@@ -340,7 +391,7 @@ export class WorldView {
           break;
         }
         case Kind.Ally: {
-          v.body.texture = v.entry.frames[Math.floor(this.time * 8) & 1]!;
+          v.body.texture = v.entry.frames[Math.floor(this.time * 8) % v.entry.frames.length]!;
           v.glow?.position.set(x, y);
           if (Math.random() < 0.3) this.fx.mote(x, y, 0xaaf6ec);
           break;
@@ -370,7 +421,7 @@ export class WorldView {
     }
   }
 
-  private animatePlayer(i: number, v: View): void {
+  private animatePlayer(i: number, v: View, dt: number): void {
     const w = this.world;
     const e = w.e;
     const p = w.players[e.ref[i]!];
@@ -381,7 +432,7 @@ export class WorldView {
     }
     if (p.dead) {
       v.body.texture = v.entry.frames[0]!;
-      v.body.rotation = Math.min(Math.PI / 2, p.deathT * 0.15) * (v.body.scale.x < 0 ? -1 : 1);
+      v.body.rotation = Math.min(Math.PI / 2, p.deathT * 0.15) * (v.face < 0 ? -1 : 1);
       v.body.alpha = Math.max(p.hardcore ? 0.3 : 0.55, 1 - p.deathT / 60);
       if (v.weapon) v.weapon.visible = false;
       // Co-op: an ally is reviving this hero.
@@ -390,14 +441,35 @@ export class WorldView {
       return;
     }
     v.body.rotation = 0;
-    const moving = p.moving || p.dashT > 0;
-    const frames = moving ? CHAR_ANIMS.run : CHAR_ANIMS.idle;
-    const idx = frames[Math.abs(Math.floor(this.time * (moving ? 10 : 2))) % frames.length]!;
-    const flash = e.hitFlash[i]! > 0;
-    v.body.texture = (flash ? v.entry.flash : v.entry.frames)[idx]!;
     const aim = p.aim;
     const left = Math.abs(aim) > Math.PI / 2;
-    v.body.scale.x = left ? -1 : 1;
+    // Facing follows the aim; turning around squeezes through the middle instead of snapping.
+    v.face = approach(v.face, left ? -1 : 1, dt * (2 / TURN_TIME));
+    const faceSign = v.face < 0 ? -1 : 1;
+    // Real speed (world px per second) drives the run cycle, so the feet match the ground.
+    const vx = (e.x[i]! - e.px[i]!) * 30;
+    const vy = (e.y[i]! - e.py[i]!) * 30;
+    const speed = Math.sqrt(vx * vx + vy * vy);
+    const moving = (p.moving || p.dashT > 0) && speed > 4;
+    let idx: number;
+    if (moving) {
+      // Running away from the aim (auto-aim at an enemy behind us) plays the cycle backwards:
+      // a backpedal instead of a moonwalk.
+      const back = vx * faceSign < -speed * 0.3 ? -1 : 1;
+      const rate = Math.min(1.8, Math.max(0.6, speed / PLAYER_SPEED));
+      v.phase += dt * CHAR_ANIM_FPS.run * rate * back;
+      const run = CHAR_ANIMS.run;
+      idx = run[((Math.floor(v.phase) % run.length) + run.length) % run.length]!;
+    } else {
+      v.phase += dt * CHAR_ANIM_FPS.idle;
+      const idle = CHAR_ANIMS.idle;
+      idx = idle[Math.floor(v.phase) % idle.length]!;
+    }
+    const flash = e.hitFlash[i]! > 0;
+    v.body.texture = (flash ? v.entry.flash : v.entry.frames)[idx]!;
+    // Dash: a little stretch along the motion.
+    const stretch = p.dashT > 0 ? 1.08 : 1;
+    v.body.scale.set(faceSign * Math.max(0.2, Math.abs(v.face)) * stretch, 2 - stretch);
     v.body.alpha = e.iframes[i]! > 0 && p.dashT === 0 && w.tick & 2 ? 0.45 : 1;
     if (p.dashT > 0 && Math.random() < 0.6)
       this.fx.mote(e.x[i]!, e.y[i]! - 2, p.dashDamage > 0 ? 0xd89cf2 : 0xa3a1bd, 0.25);
@@ -432,32 +504,55 @@ export class WorldView {
       ) {
         const arc =
           ((atk.kind === 'melee_arc' ? atk.arc : (atk.melee?.arc ?? 120)) * Math.PI) / 180;
-        rot = aim + (left ? 1 : -1) * (-arc / 2 + arc * Math.min(1, t * 1.6));
+        // Fast start, soft stop: the blade snaps through the arc and settles at the end.
+        rot = aim + (left ? 1 : -1) * (-arc / 2 + arc * easeOutCubic(t * 1.25));
       }
     }
     const recoil =
       p.swingT > 0 && base.kind === 'weapon' && base.def.attack.kind !== 'melee_arc'
-        ? -2 * (p.swingT / p.swingMax)
+        ? -2 * easeOutCubic(p.swingT / p.swingMax)
         : 0;
+    // The weapon sits in the front hand and swings with it.
+    const hand = CHAR_HANDS[idx]!;
     wv.rotation = rot;
     wv.scale.y = left ? -1 : 1;
-    wv.position.set((left ? -3 : 3) + Math.cos(aim) * recoil, -8 + Math.sin(aim) * recoil);
+    wv.position.set(
+      snap(hand.x * faceSign * Math.abs(v.face) + Math.cos(aim) * recoil),
+      snap(hand.y - 1 + Math.sin(aim) * recoil),
+    );
     wv.zIndex = Math.sin(aim) < -0.35 ? -1 : 1;
     v.body.zIndex = 0;
-    wv.tint = flash ? 0xffffff : 0xffffff;
   }
 
-  private animateEnemy(i: number, v: View): void {
+  private animateEnemy(i: number, v: View, dt: number): void {
     const w = this.world;
     const e = w.e;
     const st = e.state[i]!;
     const flash = e.hitFlash[i]! > 0;
-    const moving = Math.abs(e.vx[i]!) + Math.abs(e.vy[i]!) > 8;
-    const frame = Math.floor(this.time * (moving ? 6 : 2) + i) & 1;
-    v.body.texture = (flash ? v.entry.flash : v.entry.frames)[frame % v.entry.frames.length]!;
+    const def = w.content.enemies[e.def[i]!]!;
+    const speed = Math.sqrt(e.vx[i]! * e.vx[i]! + e.vy[i]! * e.vy[i]!);
+    const moving = speed > 8;
+    const n = v.entry.frames.length;
+    let frame: number;
+    if (moving || IDLE_ANIMATED.has(def.sprite)) {
+      // Cycle speed follows the actual speed (a 4-frame cycle ≈ one stride).
+      v.phase += dt * (moving ? Math.min(12, 4 + speed / 8) : 5);
+      frame = Math.floor(v.phase) % n;
+    } else {
+      frame = 0;
+    }
+    v.body.texture = (flash ? v.entry.flash : v.entry.frames)[frame]!;
     const left = Math.abs(e.face[i]!) > Math.PI / 2;
-    let sx = left ? -1 : 1;
+    v.face = approach(v.face, left ? -1 : 1, dt * (2 / TURN_TIME));
+    let sx = (v.face < 0 ? -1 : 1) * Math.max(0.2, Math.abs(v.face));
     let sy = 1;
+    // Standing still: slow breathing instead of a frozen pose.
+    if (!moving && frame === 0) sy = 1 + Math.sin(this.time * 3 + i) * 0.02;
+    // Hit: a short squash.
+    if (flash) {
+      sx *= 1.1;
+      sy *= 0.9;
+    }
     v.body.alpha = 1;
     v.body.tint = 0xffffff;
     v.body.y = 0;
@@ -478,7 +573,6 @@ export class WorldView {
       sy = 1 - t * 0.6;
       v.body.tint = t < 0.15 ? 0xffffff : 0xffffff;
     } else if (st === ES.Act) {
-      const def = w.content.enemies[e.def[i]!]!;
       const phase = e.cooldown[i]!;
       const atks = phase > 0 ? def.phases[phase - 1]!.attacks : def.attacks;
       const act = atks[e.ref[i]!]?.action;
@@ -488,7 +582,7 @@ export class WorldView {
         v.body.y = -Math.sin(Math.PI * t) * 12;
       }
     }
-    if (moving && st === ES.Move) sy *= 1 + Math.sin(this.time * 18 + i) * 0.04;
+    if (moving && st === ES.Move && n < 3) sy *= 1 + Math.sin(this.time * 18 + i) * 0.04;
     if (e.flags[i]! & EF.Flying) v.body.y += Math.sin(this.time * 6 + i) * 2 - 4;
     v.body.scale.set(sx, sy);
     if (e.slowT[i]! > 0) v.body.tint = 0x8ad1f5;
@@ -501,7 +595,7 @@ export class WorldView {
     const def = w.content.projectiles[e.def[i]!]!;
     v.body.rotation = def.spin ? (this.time * def.spin * Math.PI) / 180 : e.face[i]!;
     v.body.y = -4;
-    v.glow?.position.set(Math.round(x), Math.round(y - 4));
+    v.glow?.position.set(snap(x), snap(y - 4));
     if (def.trail !== undefined && Math.random() < 0.5) this.fx.mote(x, y - 4, def.trail, 0.25);
   }
 
@@ -510,9 +604,10 @@ export class WorldView {
     const k = e.def[i]!;
     const bob = Math.sin(this.time * 4 + i) * 1.5;
     v.body.y = -4 + bob;
-    if (k === PickupKind.Gold) v.body.texture = v.entry.frames[Math.floor(this.time * 6 + i) & 1]!;
+    if (k === PickupKind.Gold)
+      v.body.texture = v.entry.frames[Math.floor(this.time * 8 + i) % v.entry.frames.length]!;
     if (v.glow) {
-      v.glow.position.set(Math.round(x), Math.round(y));
+      v.glow.position.set(snap(x), snap(y));
       v.glow.alpha = 0.55 + 0.2 * Math.sin(this.time * 3 + i);
     }
   }
@@ -523,7 +618,8 @@ export class WorldView {
     const k = e.def[i]!;
     if (k === PropKind.Captive) {
       const frames = CHAR_ANIMS.idle;
-      v.body.texture = v.entry.frames[frames[Math.floor(this.time * 2 + i) % frames.length]!]!;
+      v.body.texture =
+        v.entry.frames[frames[Math.floor(this.time * CHAR_ANIM_FPS.idle + i) % frames.length]!]!;
       if (v.extra) v.extra.texture = this.atlas.get('prop.cage').frames[e.state[i] ? 1 : 0]!;
       v.body.scale.x = Math.sin(this.time * 0.7 + i) > 0 ? 1 : -1;
       if (e.state[i] && Math.random() < 0.15)
@@ -544,19 +640,20 @@ export class WorldView {
         const frames = CHAR_ANIMS.idle;
         const npc = this.npcSheet(e.ref[i]!);
         if (npc)
-          v.extra.texture = npc.frames[frames[Math.floor(this.time * 2 + i) % frames.length]!]!;
+          v.extra.texture =
+            npc.frames[frames[Math.floor(this.time * CHAR_ANIM_FPS.idle + i) % frames.length]!]!;
       }
       if (st?.id === 'portal') {
         v.body.rotation = this.time * 0.8;
         v.body.y = -6;
       }
-      v.glow?.position.set(Math.round(x), Math.round(y - (st?.id === 'altar' ? 18 : 6)));
+      v.glow?.position.set(snap(x), snap(y - (st?.id === 'altar' ? 18 : 6)));
       if (st?.id === 'portal' && Math.random() < 0.4)
         this.fx.mote(x + (Math.random() - 0.5) * 20, y - 6, 0x36c4b4, 0.6);
     } else if (k === PropKind.Portal) {
       v.body.rotation = this.time * 0.8;
       v.body.y = -6;
-      v.glow?.position.set(Math.round(x), Math.round(y - 6));
+      v.glow?.position.set(snap(x), snap(y - 6));
       if (Math.random() < 0.4) this.fx.mote(x + (Math.random() - 0.5) * 20, y - 6, 0x36c4b4, 0.6);
     }
     if (k === PropKind.Stairs && w.stairsOpen && Math.random() < 0.15)

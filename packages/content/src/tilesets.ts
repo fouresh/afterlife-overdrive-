@@ -66,7 +66,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     wallFace: 'forest.wallFace',
     wallFaceWeights: [3, 2],
     door: 'forest.door',
-    doorLocked: 'crypt.doorLocked',
+    doorLocked: 'forest.doorLocked',
     decor: {
       flowers: 'forest.flowers',
       mushroom: 'forest.mushroom',

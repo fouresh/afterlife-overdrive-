@@ -91,6 +91,15 @@ function poseOf(f: number): Pose {
 
 const POSES: Pose[] = Array.from({ length: CHAR_FRAME_COUNT }, (_, f) => poseOf(f));
 
+/**
+ * Front hand position per frame, in world pixels from the feet pivot (facing right): the
+ * renderer puts the held weapon there, so it swings with the arm while running.
+ */
+export const CHAR_HANDS: { x: number; y: number }[] = POSES.map((pose) => ({
+  x: (pose.frontHand[0] - CHAR_OX) / 2,
+  y: (pose.frontHand[1] - CHAR_OY) / 2,
+}));
+
 // ---------------------------------------------------------------------------------------------
 // Palettes (slot ramps: 0 = darkest … 3 = lightest)
 

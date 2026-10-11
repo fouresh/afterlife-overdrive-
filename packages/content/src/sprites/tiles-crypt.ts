@@ -1,436 +1,362 @@
 import { C } from '../palette';
-import { sprite } from './types';
+import { hash01, hd, Pix } from './paint';
+import type { SpriteDef } from './types';
 
-/** Crypt tileset (16×16). Keys 0-4 = stone ramp so the whole set reads as one material. */
-const stone = { '0': C.stone0, '1': C.stone1, '2': C.stone2, '3': C.stone3, '4': C.stone4 };
-const T = 16;
+/**
+ * Crypt tileset, HD (res 2: a 16 px tile is 32×32 texels). Keys 0-4 = the stone ramp so the
+ * whole set reads as one material; tiles are drawn so their edges meet seamlessly.
+ */
 
-export const cryptFloor = sprite('crypt.floor', T, T, { ...stone, m: C.moss1, b: C.bone1 }, [
-  `
-  1111111011111111
-  1111111011112111
-  1121111011111111
-  1111111011111111
-  1111111011111111
-  0000000000000000
-  1111011111111111
-  1111011111111111
-  1111011111211111
-  1211011111111111
-  1111011111111111
-  0000000000000000
-  1111111111011111
-  1111121111011111
-  1111111111011112
-  1111111111011111
-  `,
-  `
-  1111111011111111
-  1111111011111111
-  1111111011111111
-  1111111010111111
-  1112111001111111
-  0000000000000000
-  1111011111011111
-  1111011111101111
-  1111011111110111
-  1111011111111011
-  1111011111111111
-  0000000000000000
-  1111111111011111
-  1111111111011111
-  1121111111011111
-  1111111111011111
-  `,
-  `
-  1111111111111110
-  1211111111111110
-  1111111111111110
-  1111111111111110
-  1111112111111110
-  1111111111111110
-  1111111111111110
-  0000000000000000
-  1111111011111111
-  1111111011111111
-  1111111011111111
-  1112111011111121
-  1111111011111111
-  1111111011111111
-  1111111011111111
-  0000000000000000
-  `,
-  `
-  1111111011111111
-  1111111011111111
-  1mm11110111m1111
-  1m1m1110111mm111
-  111111101111m111
-  0000000000000000
-  1111011111111111
-  1111011111111111
-  1111011111111111
-  1111011111111m11
-  1111011111111mm1
-  0000000000000000
-  11111111110111m1
-  1111111111011111
-  1111111111011111
-  1111111111011111
-  `,
+const T = 32;
+const PAL: Record<string, string> = {
+  '0': C.stone0,
+  '1': C.stone1,
+  '2': C.stone2,
+  '3': C.stone3,
+  '4': C.stone4,
+  k: C.ink,
+  K: C.black,
+  n: C.night,
+  W: C.white,
+  m: C.moss1,
+  M: C.moss0,
+  b: C.bone0,
+  B: C.bone1,
+  p: C.bone2,
+  w: C.wood0,
+  x: C.wood1,
+  y: C.wood2,
+  z: C.wood3,
+  r: C.red1,
+  R: C.red2,
+  s: C.red3,
+  g: C.gold1,
+  G: C.gold2,
+  H: C.gold3,
+};
+
+const tile = (id: string, frames: Pix[], opts: { ox?: number; oy?: number } = {}): SpriteDef =>
+  hd(id, PAL, frames, { ...opts, outline: false });
+
+/** One flagstone: speckled fill, lit top-left bevel, dark bottom-right bevel. */
+function slab(p: Pix, x: number, y: number, w: number, h: number, seed: number): void {
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) {
+      const n = hash01(xx, yy, seed);
+      p.set(xx, yy, n < 0.08 ? '2' : n > 0.95 ? '0' : '1');
+    }
+  }
+  p.rect(x, y, w, 1, '2');
+  p.rect(x, y, 1, h, '2');
+  p.rect(x, y + h - 1, w, 1, '0');
+  p.rect(x + w - 1, y, 1, h, '0');
+}
+
+/** Grout grid + slabs. `cuts` = slab rectangles inside the tile (grout drawn between). */
+function floor(seed: number, cuts: [number, number, number, number][]): Pix {
+  const p = new Pix(T, T, '0');
+  for (const [x, y, w, h] of cuts) slab(p, x + 1, y + 1, w - 1, h - 1, seed);
+  // Grout corners sink deeper.
+  for (const [x, y] of cuts) p.set(x, y, 'k');
+  return p;
+}
+
+function crack(p: Pix, x: number, y: number, steps: [number, number][]): void {
+  let cx = x;
+  let cy = y;
+  for (const [dx, dy] of steps) {
+    p.line(cx, cy, cx + dx, cy + dy, 'k');
+    cx += dx;
+    cy += dy;
+  }
+}
+
+export const cryptFloor = tile('crypt.floor', [
+  // Big flagstones (one per tile) are the most common: calm floor, readable sprites on top.
+  floor(1, [[0, 0, 32, 32]]),
+  floor(2, [
+    [0, 0, 32, 14],
+    [0, 14, 32, 18],
+  ]),
+  floor(3, [
+    [0, 0, 18, 32],
+    [18, 0, 14, 16],
+    [18, 16, 14, 16],
+  ]),
+  (() => {
+    const p = floor(4, [[0, 0, 32, 32]]);
+    // A hairline crack and moss in the grout.
+    crack(p, 6, 5, [
+      [4, 3],
+      [3, 1],
+      [2, 4],
+    ]);
+    for (let k = 0; k < 24; k++) {
+      const x = Math.floor(hash01(k, 1, 9) * T);
+      p.set(x, hash01(k, 2, 9) < 0.5 ? 0 : 1, hash01(k, 3, 9) < 0.5 ? 'm' : 'M', {
+        onlyOver: '0k2',
+      });
+    }
+    p.ellipse(25, 26, 3, 2, 'm', { onlyOver: '12' });
+    return p;
+  })(),
 ]);
 
-export const cryptWallTop = sprite('crypt.wallTop', T, T, { n: C.ink, d: C.night, k: C.black }, [
-  `
-  nnnnnnnnnnnnnnnn
-  nnnnnnnnnnnnnnnn
-  nnndnnnnnnnnnnnn
-  nnnnnnnnnnnndnnn
-  nnnnnnnnnnnnnnnn
-  nnnnnnnnnnnnnnnn
-  nnnnnndnnnnnnnnn
-  nnnnnnnnnnnnnnnn
-  nnnnnnnnnnnnnnnn
-  nnnnnnnnnnnnndnn
-  nndnnnnnnnnnnnnn
-  nnnnnnnnnnnnnnnn
-  nnnnnnnndnnnnnnn
-  nnnnnnnnnnnnnnnn
-  nnnnnnnnnnnnnnnn
-  nnnnnnnnnnnnnnnn
-  `,
+export const cryptWallTop = tile('crypt.wallTop', [
+  (() => {
+    const p = new Pix(T, T, 'k');
+    for (let y = 0; y < T; y++)
+      for (let x = 0; x < T; x++) {
+        const n = hash01(x, y, 31);
+        if (n < 0.06) p.set(x, y, 'n');
+        else if (n > 0.97) p.set(x, y, 'K');
+      }
+    return p;
+  })(),
 ]);
 
-export const cryptWallFace = sprite('crypt.wallFace', T, T, { ...stone, m: C.moss1, M: C.moss0 }, [
-  `
-  3333333333333333
-  2222222122222221
-  2222222122222221
-  1111111111111111
-  2221222222212222
-  2221222222212222
-  1111111111111111
-  2222222122222221
-  2222222122222221
-  1111111111111111
-  2221222222212222
-  2221222222212222
-  1111111111111111
-  2222222122222221
-  2222222122222221
-  0000000000000000
-  `,
-  `
-  3333333333333333
-  2222222122222221
-  22m2222122222221
-  1mm1111111111111
-  2m21222222212222
-  2221222222212222
-  1111111111111111
-  2222222122222m21
-  22222221222mmm21
-  111111111111M111
-  2221222222212222
-  2221222222212222
-  1111111111111111
-  2222222122222221
-  2222222122222221
-  0000000000000000
-  `,
-]);
+/** Brick wall face: 4 courses of 8 texels, every other course offset by half a brick. */
+function wallFace(seed: number, moss: boolean): Pix {
+  const p = new Pix(T, T, '0');
+  for (let row = 0; row < 4; row++) {
+    const y = row * 8;
+    const off = row % 2 ? 8 : 0;
+    for (let bx = -16; bx < T; bx += 16) {
+      const x = bx + off;
+      for (let yy = y + 1; yy < y + 8; yy++) {
+        for (let xx = Math.max(0, x + 1); xx < Math.min(T, x + 16); xx++) {
+          const n = hash01(xx, yy, seed);
+          const base = (Math.floor(x / 16) + row) % 3 === 0 ? '2' : '1';
+          p.set(xx, yy, n < 0.07 ? '3' : n > 0.93 ? '0' : base);
+        }
+      }
+      // Lit top edge and shadowed bottom edge of each brick.
+      for (let xx = Math.max(0, x + 1); xx < Math.min(T, x + 16); xx++) {
+        p.set(xx, y + 1, '3');
+        p.set(xx, y + 7, '0');
+      }
+    }
+  }
+  // The foot of the wall sits in shadow.
+  for (let x = 0; x < T; x++) {
+    p.set(x, 30, 'k');
+    p.set(x, 31, 'K');
+    if (hash01(x, 0, seed) < 0.5) p.set(x, 29, '0');
+  }
+  if (moss) {
+    for (const [x, len] of [
+      [5, 9],
+      [6, 13],
+      [7, 6],
+      [20, 7],
+      [21, 11],
+      [22, 4],
+      [27, 6],
+    ] as const) {
+      for (let y = 0; y < len; y++) p.set(x, y, y > len - 3 ? 'M' : 'm');
+    }
+  }
+  return p;
+}
 
-export const torch = sprite(
+export const cryptWallFace = tile('crypt.wallFace', [wallFace(11, false), wallFace(12, true)]);
+
+export const torch = tile(
   'crypt.torch',
-  T,
-  T,
-  { y: C.gold3, Y: C.gold2, r: C.red3, R: C.red2, w: C.wood2, k: C.stone0 },
-  [
-    `
-    ................
-    .......y........
-    ......yY........
-    ......YYy.......
-    .....rYYYr......
-    .....rRYRr......
-    ......RRR.......
-    .......w........
-    .......w........
-    ......kwk.......
-    ......kkk.......
-    ................
-    ................
-    ................
-    ................
-    ................
-    `,
-    `
-    ................
-    ........y.......
-    .......Yy.......
-    ......yYY.......
-    ......rYYr......
-    .....rRYRr......
-    ......RRR.......
-    .......w........
-    .......w........
-    ......kwk.......
-    ......kkk.......
-    ................
-    ................
-    ................
-    ................
-    ................
-    `,
-  ],
-  { ox: 8, oy: 8 },
+  [0, 1, 2, 3].map((f) => {
+    const p = new Pix(T, T);
+    // Iron bracket and the wooden handle.
+    p.rect(13, 24, 6, 2, '2');
+    p.rect(13, 24, 6, 1, '3');
+    p.limb(16, 26, 16, 16, 1.6, 1.3, 'wxy');
+    p.rect(13.5, 16, 5, 2, '2');
+    // Flame: flickers between four shapes.
+    const h = [11, 13, 10, 12][f]!;
+    const lean = [0, 1, -1, 0.5][f]!;
+    p.limb(16, 15, 16 + lean, 15 - h, 3.6, 0.6, 'r');
+    p.limb(16, 15, 16 + lean * 0.8, 15 - h + 1.5, 2.8, 0.5, 'R');
+    p.limb(16, 14.5, 16 + lean * 0.6, 15 - h + 4, 2, 0.5, 's');
+    p.limb(16, 14, 16 + lean * 0.4, 15 - h + 6.5, 1.2, 0.4, 'H');
+    if (f % 2) p.set(16 + lean * 2, 15 - h - 2, 's');
+    return p;
+  }),
+  { ox: 16, oy: 16 },
 );
 
-export const doorBars = sprite(
-  'crypt.door',
-  T,
-  T,
-  { k: C.ink, s: C.stone3, S: C.stone4, d: C.stone1 },
-  [
-    `
-  kkkkkkkkkkkkkkkk
-  kSdkSdkSdkSdkSdk
-  ksdksdksdksdksdk
-  ksdksdksdksdksdk
-  kkkkkkkkkkkkkkkk
-  kSSSSSSSSSSSSSSk
-  ksdksdksdksdksdk
-  ksdksdksdksdksdk
-  ksdksdksdksdksdk
-  ksdksdksdksdksdk
-  kkkkkkkkkkkkkkkk
-  kSSSSSSSSSSSSSSk
-  ksdksdksdksdksdk
-  ksdksdksdksdksdk
-  ksdksdksdksdksdk
-  kkkkkkkkkkkkkkkk
-  `,
-  ],
-);
-
-export const doorLocked = sprite(
-  'crypt.doorLocked',
-  T,
-  T,
-  { k: C.ink, w: C.wood1, W: C.wood2, g: C.gold2, G: C.gold1, d: C.wood0 },
-  [
-    `
-    kkkkkkkkkkkkkkkk
-    kWWwdWWwdWWwdWWk
-    kWwwdWwwdWwwdWwk
-    kkkkkkkkkkkkkkkk
-    kWWwdWWwdWWwdWWk
-    kWwwdWwgggwwdWwk
-    kWwwdWwgkgwwdWwk
-    kWwwdWwgggwwdWwk
-    kWwwdWwwgwwwdWwk
-    kWwwdWwGgGwwdWwk
-    kkkkkkkkkkkkkkkk
-    kWWwdWWwdWWwdWWk
-    kWwwdWwwdWwwdWwk
-    kWwwdWwwdWwwdWwk
-    kWwwdWwwdWwwdWwk
-    kkkkkkkkkkkkkkkk
-    `,
-  ],
-);
-
-export const stairsDown = sprite('crypt.stairs', T, T, { ...stone, k: C.black }, [
-  `
-  3333333333333333
-  3kkkkkkkkkkkkkk3
-  3k222222222222k3
-  3k111111111111k3
-  3kkkkkkkkkkkkkk3
-  3k222222222222k3
-  3k111111111111k3
-  3kkkkkkkkkkkkkk3
-  3k222222222222k3
-  3k111111111111k3
-  3kkkkkkkkkkkkkk3
-  3k222222222222k3
-  3k000000000000k3
-  3kkkkkkkkkkkkkk3
-  3kkkkkkkkkkkkkk3
-  3333333333333333
-  `,
+export const doorBars = tile('crypt.door', [
+  (() => {
+    // Portcullis: bars with gaps (the doorway floor shows through).
+    const p = new Pix(T, T);
+    for (const x of [2, 8, 14, 20, 26]) p.limb(x + 1.5, 0, x + 1.5, 31, 1.4, 1.4, '234');
+    for (const y of [4, 18]) {
+      p.rect(0, y, T, 3, '2');
+      p.rect(0, y, T, 1, '3');
+    }
+    for (const x of [3.5, 9.5, 15.5, 21.5, 27.5]) p.set(x, 31, '0');
+    return p;
+  })(),
 ]);
 
-export const spikes = sprite('crypt.spikes', T, T, { ...stone, s: C.stone4, k: C.ink }, [
-  `
-  1111111111111111
-  1000110001100011
-  1000110001100011
-  1111111111111111
-  1111111111111111
-  1000110001100011
-  1000110001100011
-  1111111111111111
-  1111111111111111
-  1000110001100011
-  1000110001100011
-  1111111111111111
-  1111111111111111
-  1000110001100011
-  1000110001100011
-  1111111111111111
-  `,
-  `
-  1111111111111111
-  1s0011s0011s0011
-  1s00s1s00s1s00s1
-  1k11k1k11k1k11k1
-  1111111111111111
-  1s0011s0011s0011
-  1s00s1s00s1s00s1
-  1k11k1k11k1k11k1
-  1111111111111111
-  1s0011s0011s0011
-  1s00s1s00s1s00s1
-  1k11k1k11k1k11k1
-  1111111111111111
-  1s0011s0011s0011
-  1s00s1s00s1s00s1
-  1k11k1k11k1k11k1
-  `,
+function lockedDoor(planks: string, band: string): Pix {
+  const p = new Pix(T, T);
+  for (let x = 0; x < T; x += 8) {
+    p.rect(x, 0, 8, T, planks[1]!);
+    p.rect(x, 0, 1, T, planks[0]!);
+    p.rect(x + 1, 0, 1, T, planks[2]!);
+    for (let y = 3; y < T; y += 9) p.set(x + 4, y + (x % 3), planks[0]!);
+  }
+  for (const y of [5, 24]) {
+    p.rect(0, y, T, 3, band[1]!);
+    p.rect(0, y, T, 1, band[2]!);
+    for (const x of [3, 13, 19, 29]) p.set(x, y + 1, band[0]!);
+  }
+  // Gold lock plate with a keyhole.
+  p.rect(11, 11, 10, 11, 'g');
+  p.rect(12, 12, 8, 9, 'G');
+  p.rect(12, 12, 8, 1, 'H');
+  p.ball(16, 15.5, 1.5, 1.5, 'K');
+  p.rect(15.5, 16, 1, 3, 'K');
+  return p;
+}
+
+export const doorLocked = tile('crypt.doorLocked', [lockedDoor('wxy', '023')]);
+
+export const stairsDown = tile('crypt.stairs', [
+  (() => {
+    // Steps going down into darkness (top-down): lighter treads near the top.
+    const p = new Pix(T, T, 'K');
+    const treads = ['3', '2', '1', '0', 'k'];
+    for (let s = 0; s < 5; s++) {
+      const y = 2 + s * 6;
+      p.rect(3 + s, y, T - 6 - s * 2, 4, treads[s]!);
+      p.rect(3 + s, y, T - 6 - s * 2, 1, s < 2 ? '4' : '2');
+    }
+    // Side walls.
+    p.rect(0, 0, 3, T, '1');
+    p.rect(T - 3, 0, 3, T, '1');
+    p.rect(0, 0, T, 2, '2');
+    p.rect(0, 0, T, 1, '3');
+    return p;
+  })(),
 ]);
 
-const decoPal = { b: C.bone1, B: C.bone2, d: C.bone0, k: C.ink, w: C.stone4, W: C.white };
-
-export const decoBones = sprite('crypt.bones', T, T, decoPal, [
-  `
-  ................
-  ................
-  ................
-  ..........B.....
-  .........Bbd....
-  ........Bbd.....
-  ..BB...Bbd......
-  ..BbbbBbd.......
-  ...dddbd........
-  ......d.........
-  ................
-  ...........BB...
-  ..........Bbbb..
-  ..........dddd..
-  ................
-  ................
-  `,
+export const spikes = tile('crypt.spikes', [
+  (() => {
+    const p = new Pix(T, T);
+    p.rect(3, 3, 26, 26, '1');
+    p.rect(3, 3, 26, 1, '2');
+    p.rect(3, 28, 26, 1, '0');
+    for (let y = 8; y < 28; y += 8) for (let x = 8; x < 28; x += 8) p.ellipse(x, y, 1.6, 1.4, 'K');
+    return p;
+  })(),
+  (() => {
+    const p = new Pix(T, T);
+    p.rect(3, 3, 26, 26, '1');
+    p.rect(3, 3, 26, 1, '2');
+    for (let y = 8; y < 28; y += 8) {
+      for (let x = 8; x < 28; x += 8) {
+        p.ellipse(x, y + 1.5, 2.4, 1.2, 'k');
+        p.poly([x - 2, y + 1.5, x, y - 6, x + 2, y + 1.5], '3');
+        p.line(x, y - 5, x, y, '4');
+        p.set(x, y - 6, 'W');
+      }
+    }
+    return p;
+  })(),
 ]);
 
-export const decoSkull = sprite('crypt.skull', T, T, decoPal, [
-  `
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ......BBBB......
-  .....BbbbbB.....
-  .....bkbbkb.....
-  .....bkbbkb.....
-  .....dbbbbd.....
-  ......bkkb......
-  ......dbbd......
-  ................
-  ................
-  ................
-  `,
+export const decoBones = tile('crypt.bones', [
+  (() => {
+    const p = new Pix(T, T);
+    p.limb(6, 22, 20, 14, 1.2, 1.2, 'bBp');
+    for (const [x, y] of [
+      [5, 22],
+      [7, 24],
+      [20, 13],
+      [21, 15.5],
+    ] as const)
+      p.ball(x, y, 1.6, 1.6, 'bBp');
+    p.limb(19, 24, 25, 25, 0.9, 0.9, 'bB');
+    p.set(12, 26, 'B');
+    p.set(26, 20, 'b');
+    return p;
+  })(),
 ]);
 
-export const decoCobweb = sprite('crypt.cobweb', T, T, decoPal, [
-  `
-  wWwwwwwwwww.....
-  Ww...w....w.....
-  w.w..w...w......
-  w..w.w..w.......
-  w...wwww........
-  w...ww.w........
-  wwwww...........
-  w..w............
-  w.w.............
-  ww..............
-  w...............
-  ................
-  ................
-  ................
-  ................
-  ................
-  `,
+export const decoSkull = tile('crypt.skull', [
+  (() => {
+    const p = new Pix(T, T);
+    p.ellipse(16, 24.5, 6, 1.6, 'k');
+    p.ball(16, 18, 5.4, 5, 'bBp', { bias: 0.5 });
+    p.rect(13, 22, 7, 2.5, 'B');
+    p.ellipse(14, 18, 1.5, 1.7, 'K');
+    p.ellipse(18.4, 18, 1.5, 1.7, 'K');
+    for (const x of [14, 16, 18]) p.set(x, 23.5, 'k');
+    return p;
+  })(),
 ]);
 
-export const decoCrack = sprite('crypt.rubble', T, T, { ...stone }, [
-  `
-  ................
-  ................
-  ................
-  .....3..........
-  ....3220........
-  ....2210..3.....
-  .....00..320....
-  .........210....
-  ..32.....00.....
-  ..210...........
-  ..00.....32.....
-  .........210....
-  ..........0.....
-  ................
-  ................
-  ................
-  `,
+export const decoCobweb = tile('crypt.cobweb', [
+  (() => {
+    // Corner web (top-left), thin and faint.
+    const p = new Pix(T, T);
+    for (const [x, y] of [
+      [22, 0],
+      [16, 12],
+      [0, 22],
+      [9, 18],
+      [20, 6],
+    ] as const)
+      p.line(0, 0, x, y, '3');
+    for (const r of [6, 11, 17]) {
+      p.line(r, 0, r * 0.75, r * 0.55, '3');
+      p.line(r * 0.75, r * 0.55, r * 0.45, r * 0.85, '3');
+      p.line(r * 0.45, r * 0.85, 0, r, '3');
+    }
+    return p;
+  })(),
 ]);
 
-export const pillar = sprite(
+export const decoCrack = tile('crypt.rubble', [
+  (() => {
+    const p = new Pix(T, T);
+    p.ball(10, 20, 3.4, 2.6, '0123', { bias: 0.3 });
+    p.ball(15.5, 22, 2.4, 1.8, '0123', { bias: 0.3 });
+    p.ball(22, 18, 1.6, 1.3, '123');
+    p.set(19, 24, '2');
+    p.set(7, 25, '1');
+    crack(p, 18, 8, [
+      [3, 3],
+      [-1, 3],
+      [3, 2],
+    ]);
+    return p;
+  })(),
+]);
+
+export const pillar = tile(
   'crypt.pillar',
-  T,
-  32,
-  { ...stone, k: C.ink },
   [
-    `
-    ................
-    .00000000000000.
-    .43333333333332.
-    .33333333333331.
-    .00000000000000.
-    ..322222222220..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322122222210..
-    ..322222222220..
-    .00000000000000.
-    .43333333333332.
-    .33333333333331.
-    .22222222222220.
-    .00000000000000.
-    ................
-    ................
-    `,
+    (() => {
+      const p = new Pix(T, 64);
+      // Base, cylindrical shaft, capital.
+      p.shadedPoly([5, 52, 27, 52, 28, 60, 4, 60], '0123');
+      p.rect(4, 59, 24, 2, 'k');
+      p.limb(16, 12, 16, 52, 8.4, 8.4, '01234', { bias: -0.3 });
+      for (let y = 16; y < 52; y += 9) p.line(9, y, 23, y, '1', { onlyOver: '234' });
+      p.shadedPoly([4, 6, 28, 6, 26, 13, 6, 13], '01234', { bias: 0.2 });
+      p.rect(4, 6, 24, 1, '4');
+      p.line(11, 20, 13, 27, 'k');
+      p.line(13, 27, 12, 33, 'k');
+      p.ellipse(8, 52, 3, 2, 'm', { onlyOver: '0123' });
+      p.ellipse(24, 54, 2, 1.4, 'M', { onlyOver: '0123' });
+      return p;
+    })(),
   ],
-  { ox: 8, oy: 30 },
+  { ox: 16, oy: 60 },
 );
 
-export const CRYPT_TILES = [
+export const CRYPT_TILES: SpriteDef[] = [
   cryptFloor,
   cryptWallTop,
   cryptWallFace,

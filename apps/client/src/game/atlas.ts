@@ -175,10 +175,10 @@ export class Atlas {
   private cursorY = 1;
   private rowH = 0;
 
-  private constructor(size: number) {
+  private constructor(width: number, height: number) {
     this.canvas = document.createElement('canvas');
-    this.canvas.width = size;
-    this.canvas.height = size;
+    this.canvas.width = width;
+    this.canvas.height = height;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: false })!;
     this.ctx.imageSmoothingEnabled = false;
     this.source = new CanvasSource({
@@ -189,7 +189,8 @@ export class Atlas {
   }
 
   static async build(extra: SpriteDef[] = []): Promise<Atlas> {
-    const atlas = new Atlas(2048);
+    // ~40% full at HD density: room for content, half the memory of a 2048² texture.
+    const atlas = new Atlas(2048, 1024);
     const defs = [...allSprites(), ...extra].sort((a, b) => spriteBox(b).h - spriteBox(a).h);
     for (const def of defs) {
       const box = spriteBox(def);

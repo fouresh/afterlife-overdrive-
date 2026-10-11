@@ -1,431 +1,365 @@
 import { Rng } from '@ao/shared';
 import { C } from '../palette';
-import { sprite, type SpriteDef } from './types';
+import { hash01, hd, Pix } from './paint';
+import type { SpriteDef } from './types';
 
 /**
- * Whispering Forest tileset (16×16). Organic textures are generated from a fixed seed, so they
- * are still plain palette pixel maps (and still replaceable by PNG overrides).
+ * Whispering Forest tileset, HD (res 2: a 16 px tile is 32×32 texels). Organic textures come
+ * from fixed seeds; tiles that repeat (grass, canopy) wrap around their edges seamlessly.
  */
-const T = 16;
 
-type Painter = (g: string[][], r: Rng) => void;
-
-/** Build a frame: fill with `base`, let the painter set pixels, return template rows. */
-function paint(w: number, h: number, base: string, seed: number, painter: Painter): string {
-  const g: string[][] = [];
-  for (let y = 0; y < h; y++) g.push(new Array<string>(w).fill(base));
-  painter(g, new Rng(seed));
-  return g.map((row) => row.join('')).join('\n');
-}
-
-/** Set a pixel with wrap-around (seamless tiles). */
-function setW(g: string[][], x: number, y: number, c: string): void {
-  const h = g.length;
-  const w = g[0]!.length;
-  g[((y % h) + h) % h]![((x % w) + w) % w] = c;
-}
-
-function set(g: string[][], x: number, y: number, c: string): void {
-  if (y < 0 || y >= g.length || x < 0 || x >= g[0]!.length) return;
-  g[y]![x] = c;
-}
-
-const grassPal = {
+const T = 32;
+const PAL: Record<string, string> = {
+  k: '#0f2016',
+  K: C.black,
+  W: C.white,
+  // grass / leaves
   '0': C.moss0,
   '1': C.moss1,
-  '2': C.green1,
-  '3': C.green2,
+  '2': C.green0,
+  '3': C.green1,
+  '4': C.green2,
+  '5': C.green3,
+  // wood / dirt
   d: C.wood0,
   D: C.wood1,
-  p: C.stone3,
-};
-
-function grass(seed: number, extra: 'none' | 'blades' | 'dirt' | 'pebbles'): string {
-  return paint(T, T, '1', seed, (g, r) => {
-    for (let k = 0; k < 10; k++) setW(g, r.int(0, 15), r.int(0, 15), '0');
-    const blades = extra === 'blades' ? 14 : 7;
-    for (let k = 0; k < blades; k++) {
-      const x = r.int(0, 15);
-      const y = r.int(0, 15);
-      const c = r.chance(0.3) ? '3' : '2';
-      setW(g, x, y, c);
-      setW(g, x, y - 1, c);
-      if (r.chance(0.4)) setW(g, x + (r.chance(0.5) ? 1 : -1), y - 2, c);
-    }
-    if (extra === 'dirt') {
-      const cx = r.int(3, 12);
-      const cy = r.int(3, 12);
-      for (let y = -3; y <= 3; y++)
-        for (let x = -4; x <= 4; x++)
-          if (x * x * 0.6 + y * y < 7 + r.int(0, 3))
-            setW(g, cx + x, cy + y, r.chance(0.2) ? 'D' : 'd');
-    }
-    if (extra === 'pebbles') for (let k = 0; k < 3; k++) setW(g, r.int(0, 15), r.int(0, 15), 'p');
-  });
-}
-
-export const forestFloor = sprite('forest.floor', T, T, grassPal, [
-  grass(11, 'none'),
-  grass(12, 'blades'),
-  grass(13, 'dirt'),
-  grass(14, 'pebbles'),
-]);
-
-/** Tree canopy seen from above (wall tops): leaf clusters with a light top-left. */
-const canopyPal = { k: '#0f2016', '0': C.green0, '1': C.green1, '2': C.green2, '3': C.green3 };
-function canopy(seed: number): string {
-  return paint(T, T, '0', seed, (g, r) => {
-    for (let k = 0; k < 7; k++) {
-      const cx = r.int(0, 15);
-      const cy = r.int(0, 15);
-      const rad = r.int(2, 4);
-      for (let y = -rad; y <= rad; y++)
-        for (let x = -rad; x <= rad; x++) {
-          const d = x * x + y * y;
-          if (d > rad * rad) continue;
-          const light = x + y < -rad * 0.6;
-          setW(g, cx + x, cy + y, d > (rad - 1) * (rad - 1) && x + y > 0 ? 'k' : light ? '2' : '1');
-        }
-      if (r.chance(0.5)) setW(g, cx - 1, cy - rad + 1, '3');
-    }
-  });
-}
-export const forestWallTop = sprite('forest.wallTop', T, T, canopyPal, [canopy(21), canopy(22)]);
-
-/** Wall face = tree trunks between the canopy and the ground. */
-const trunkPal = {
-  k: C.ink,
-  '0': C.wood0,
-  '1': C.wood1,
-  '2': C.wood2,
-  g: C.green0,
-  G: C.green1,
-  m: C.moss1,
-};
-function trunks(seed: number, xs: number[]): string {
-  return paint(T, T, 'k', seed, (g, r) => {
-    for (let x = 0; x < T; x++) {
-      set(g, x, 0, 'g');
-      set(g, x, 1, r.chance(0.6) ? 'g' : 'G');
-      if (r.chance(0.4)) set(g, x, 2, 'g');
-    }
-    for (const tx of xs) {
-      const w = 5;
-      for (let y = 2; y < T; y++) {
-        for (let x = 0; x < w; x++) {
-          const c = x === 0 ? '2' : x === w - 1 ? '0' : r.chance(0.15) ? '0' : '1';
-          set(g, tx + x, y, c);
-        }
-      }
-      // Roots and moss at the foot.
-      set(g, tx - 1, 15, '0');
-      set(g, tx + w, 15, '0');
-      set(g, tx - 1, 14, '1');
-      for (let k = 0; k < 3; k++) set(g, tx + r.int(0, w - 1), r.int(11, 15), 'm');
-    }
-  });
-}
-export const forestWallFace = sprite('forest.wallFace', T, T, trunkPal, [
-  trunks(31, [1, 9]),
-  trunks(32, [5]),
-]);
-
-/** Closed passage: thorny brambles (combat glades lock with these). */
-export const forestBrambles = sprite(
-  'forest.door',
-  T,
-  T,
-  { '0': C.wood0, '1': C.wood1, t: C.bone1, l: C.green1, L: C.green2, r: C.red2 },
-  [
-    paint(T, T, '.', 41, (g, r) => {
-      for (let v = 0; v < 4; v++) {
-        let y = r.int(0, 15);
-        const dir = r.chance(0.5) ? 1 : -1;
-        for (let x = 0; x < T; x++) {
-          set(g, x, y, '0');
-          set(g, x, y + 1, '1');
-          if (r.chance(0.18)) set(g, x, y - 1, 't');
-          if (r.chance(0.12)) set(g, x, y + 2, 'l');
-          if (r.chance(0.05)) set(g, x, y - 1, 'r');
-          if (r.chance(0.35)) y = Math.max(0, Math.min(14, y + dir));
-        }
-      }
-      for (let k = 0; k < 6; k++) set(g, r.int(0, 15), r.int(0, 15), 'L');
-    }),
-  ],
-);
-
-/** A tree standing inside a glade (replaces crypt pillars). */
-export const forestTree = sprite(
-  'forest.tree',
-  T,
-  32,
-  { ...canopyPal, w: C.wood1, W: C.wood2, d: C.wood0 },
-  [
-    paint(T, 32, '.', 51, (g, r) => {
-      for (let y = 15; y < 30; y++) {
-        set(g, 6, y, 'W');
-        set(g, 7, y, 'w');
-        set(g, 8, y, 'w');
-        set(g, 9, y, 'd');
-      }
-      set(g, 5, 29, 'd');
-      set(g, 10, 29, 'd');
-      for (let y = 0; y < 18; y++)
-        for (let x = 0; x < T; x++) {
-          const dx = x - 7.5;
-          const dy = y - 8;
-          const d = dx * dx + dy * dy * 1.1;
-          if (d > 60) continue;
-          const c = d > 44 && dx + dy > 0 ? 'k' : dx + dy < -5 ? '2' : r.chance(0.12) ? '0' : '1';
-          set(g, x, y, c);
-        }
-      for (let k = 0; k < 4; k++) set(g, r.int(3, 8), r.int(2, 7), '3');
-    }),
-  ],
-  { ox: 8, oy: 30 },
-);
-
-/** Way down (the forest "stairs"): a burrow under roots. */
-export const forestBurrow = sprite(
-  'forest.burrow',
-  T,
-  T,
-  { k: C.black, '0': C.wood0, '1': C.wood1, '2': C.wood2, d: C.moss0 },
-  [
-    paint(T, T, '.', 61, (g, r) => {
-      for (let y = 0; y < T; y++)
-        for (let x = 0; x < T; x++) {
-          const dx = (x - 7.5) / 7;
-          const dy = (y - 8) / 5.5;
-          const d = dx * dx + dy * dy;
-          if (d < 0.55) set(g, x, y, 'k');
-          else if (d < 0.85) set(g, x, y, y < 8 ? '0' : 'd');
-          else if (d < 1 && r.chance(0.6)) set(g, x, y, '1');
-        }
-      for (let k = 0; k < 3; k++) {
-        const x = r.int(3, 12);
-        set(g, x, 4, '2');
-        set(g, x, 5, '1');
-        set(g, x + 1, 6, '1');
-      }
-    }),
-  ],
-);
-
-/** Thorn trap: 0 = hidden, 1 = sharp thorns up. */
-export const forestThorns = sprite(
-  'forest.thorns',
-  T,
-  T,
-  { '0': C.moss0, '1': C.wood0, t: C.bone1, T: C.bone2 },
-  [
-    paint(T, T, '.', 71, (g, r) => {
-      for (let k = 0; k < 9; k++) set(g, r.int(1, 14), r.int(2, 14), r.chance(0.5) ? '0' : '1');
-    }),
-    paint(T, T, '.', 71, (g, r) => {
-      for (let k = 0; k < 9; k++) {
-        const x = r.int(1, 14);
-        const y = r.int(3, 14);
-        set(g, x, y, '1');
-        set(g, x, y - 1, 't');
-        set(g, x, y - 2, 'T');
-      }
-    }),
-  ],
-  { ox: 8, oy: 8 },
-);
-
-/** Glowing mushrooms: the forest's torches. */
-export const forestGlow = sprite(
-  'forest.glow',
-  T,
-  T,
-  { c: C.cyan2, C: C.cyan3, d: C.cyan1, s: C.bone1, S: C.bone2 },
-  [
-    `
-    ................
-    ................
-    ................
-    ......dccd......
-    .....dcCCcd.....
-    .....ccccccd....
-    ......dssd......
-    .......ss...dcd.
-    .......ss..dcCcd
-    .......ss...dsd.
-    ......sssS...s..
-    .............s..
-    ................
-    ................
-    ................
-    ................
-    `,
-    `
-    ................
-    ................
-    ................
-    ......dccd......
-    .....dcccCd.....
-    .....cccccd.....
-    ......dssd......
-    .......ss...dcd.
-    .......ss..dccCd
-    .......ss...dsd.
-    ......sssS...s..
-    .............s..
-    ................
-    ................
-    ................
-    ................
-    `,
-  ],
-  { ox: 8, oy: 8 },
-);
-
-const decoPal = {
-  r: C.red2,
-  R: C.red3,
-  y: C.gold2,
-  v: C.violet3,
+  e: C.wood2,
+  E: C.wood3,
+  // stone
+  p: C.stone1,
+  P: C.stone2,
+  q: C.stone3,
+  Q: C.stone4,
+  // flowers / mushrooms
+  r: C.red1,
+  R: C.red2,
+  s: C.red3,
+  g: C.gold1,
+  G: C.gold2,
+  H: C.gold3,
+  v: C.violet1,
   V: C.violet2,
-  w: C.white,
-  g: C.green1,
-  G: C.green2,
-  s: C.stone2,
-  S: C.stone3,
-  k: C.stone1,
-  b: C.wood1,
-  B: C.wood2,
-  m: C.bone2,
-  o: C.gold1,
+  u: C.violet3,
+  b: C.bone1,
+  B: C.bone2,
+  c: C.cyan1,
+  f: C.cyan2,
+  F: C.cyan3,
 };
 
-function flowers(seed: number, petal: string, center: string): string {
-  return paint(T, T, '.', seed, (g, r) => {
-    for (let k = 0; k < 3; k++) {
-      const x = r.int(2, 13);
-      const y = r.int(3, 12);
-      set(g, x, y + 1, 'g');
-      set(g, x, y + 2, 'g');
-      set(g, x - 1, y, petal);
-      set(g, x + 1, y, petal);
-      set(g, x, y - 1, petal);
-      set(g, x, y + 1 - 1, center);
+const tile = (id: string, frames: Pix[], opts: { ox?: number; oy?: number } = {}): SpriteDef =>
+  hd(id, PAL, frames, { ...opts, outline: false });
+
+/** Paint on a 3×3 canvas, then fold it into one tile (shapes cross the edges seamlessly). */
+function wrapped(base: string, paint: (p: Pix, r: Rng) => void, seed: number): Pix {
+  const big = new Pix(T * 3, T * 3);
+  paint(big, new Rng(seed));
+  const p = new Pix(T, T, base);
+  for (let y = 0; y < T * 3; y++)
+    for (let x = 0; x < T * 3; x++) {
+      const c = big.g[y * T * 3 + x]!;
+      if (c !== '.') p.set(x % T, y % T, c);
     }
-  });
+  return p;
 }
-export const decoFlowers = sprite('forest.flowers', T, T, decoPal, [
-  flowers(81, 'r', 'y'),
-  flowers(82, 'y', 'o'),
-  flowers(83, 'v', 'w'),
-  flowers(84, 'w', 'y'),
-]);
 
-export const decoMushroom = sprite('forest.mushroom', T, T, decoPal, [
-  `
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  .......rRr......
-  ......rRwRr.....
-  ......rrrrr.....
-  ........m.......
-  ........m...rr..
-  .......mm..rRwr.
-  ...........m....
-  ................
-  `,
-  `
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  .....bBBb.......
-  ....bBBBBb......
-  .......m........
-  .......m........
-  ......mm........
-  ................
-  ................
-  ................
-  `,
-]);
-
-export const decoTuft = sprite('forest.tuft', T, T, decoPal, [
-  paint(T, T, '.', 91, (g, r) => {
-    const cx = r.int(4, 11);
-    const cy = r.int(8, 13);
-    for (let k = -2; k <= 2; k++) {
-      const h = 3 - Math.abs(k) + r.int(0, 1);
-      for (let y = 0; y < h; y++) set(g, cx + k, cy - y, y === h - 1 ? 'G' : 'g');
-    }
-  }),
-  paint(T, T, '.', 92, (g, r) => {
-    for (let n = 0; n < 2; n++) {
-      const cx = r.int(3, 12);
-      const cy = r.int(6, 13);
-      for (let k = -1; k <= 1; k++) {
-        const h = 2 - Math.abs(k) + 1;
-        for (let y = 0; y < h; y++) set(g, cx + k, cy - y, y === h - 1 ? 'G' : 'g');
+function grass(seed: number, extra: 'none' | 'blades' | 'dirt' | 'pebbles'): Pix {
+  return wrapped(
+    '1',
+    (p, r) => {
+      // Patches of darker and lighter ground.
+      for (let k = 0; k < 4; k++)
+        p.ball(T + r.int(0, T), T + r.int(0, T), r.range(3, 6), r.range(2, 4), '01', {
+          dither: true,
+          bias: 0.6,
+        });
+      for (let k = 0; k < 40; k++) p.set(T + r.int(0, T), T + r.int(0, T), '0');
+      if (extra === 'dirt') {
+        const cx = T + r.int(8, 24);
+        const cy = T + r.int(8, 24);
+        p.ellipse(cx, cy, 8, 5.5, 'd');
+        p.ellipse(cx - 1, cy - 1, 6, 3.6, 'D');
+        for (let k = 0; k < 6; k++) p.set(cx + r.int(-6, 6), cy + r.int(-3, 3), 'e');
       }
-    }
-  }),
+      if (extra === 'pebbles') {
+        for (let k = 0; k < 4; k++) {
+          const x = T + r.int(0, T);
+          const y = T + r.int(0, T);
+          p.ball(x, y, 1.6, 1.2, 'pPq');
+        }
+      }
+      // Blades: short strokes leaning a little, lighter tips.
+      const n = extra === 'blades' ? 46 : 26;
+      for (let k = 0; k < n; k++) {
+        const x = T + r.int(0, T);
+        const y = T + r.int(0, T);
+        const lean = r.int(-1, 1);
+        const tall = r.chance(0.3) ? 4 : 3;
+        p.line(x, y, x + lean, y - tall, r.chance(0.35) ? '4' : '3');
+        p.set(x + lean, y - tall, r.chance(0.3) ? '5' : '4');
+      }
+    },
+    seed,
+  );
+}
+
+export const forestFloor = tile('forest.floor', [
+  grass(1, 'none'),
+  grass(2, 'blades'),
+  grass(3, 'dirt'),
+  grass(4, 'pebbles'),
 ]);
 
-export const decoStone = sprite('forest.stone', T, T, decoPal, [
-  `
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ......SSSS......
-  .....SSssss.....
-  .....Sssssk.....
-  ......kkkk......
-  ................
-  ................
-  ................
-  ................
-  `,
-  `
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ................
-  ..........SS....
-  ...SS....Sssk...
-  ..Sssk....kk....
-  ...kk...........
-  ................
-  ................
-  ................
-  `,
+function canopy(seed: number): Pix {
+  return wrapped(
+    'k',
+    (p, r) => {
+      // Overlapping leaf clusters, each shaded like a ball.
+      for (let k = 0; k < 16; k++) {
+        const x = T + r.int(0, T);
+        const y = T + r.int(0, T);
+        const rad = r.range(5, 8);
+        p.ball(x, y, rad, rad * 0.85, '2234', { dither: true });
+      }
+      for (let k = 0; k < 10; k++) p.set(T + r.int(0, T), T + r.int(0, T), '5');
+    },
+    seed,
+  );
+}
+
+export const forestWallTop = tile('forest.wallTop', [canopy(21), canopy(22)]);
+
+/** Wall face: tree trunks in the dark under the canopy, roots at the foot. */
+function trunks(seed: number, xs: number[]): Pix {
+  const p = new Pix(T, T, 'k');
+  const r = new Rng(seed);
+  for (const x of xs) {
+    p.limb(x, -2, x, 34, 4.2, 4.6, 'dDeE', { bias: -0.6 });
+    for (let k = 0; k < 4; k++) {
+      const y = r.int(2, 28);
+      p.line(x - 2, y, x - 1, y + 3, 'd');
+    }
+    // Roots spreading at the bottom.
+    p.limb(x, 26, x - 6, 31, 1.6, 0.8, 'dD');
+    p.limb(x, 27, x + 6, 31, 1.6, 0.8, 'dD');
+  }
+  // Canopy shadow at the top, moss at the bottom.
+  for (let x = 0; x < T; x++) {
+    p.set(x, 0, 'k');
+    if (hash01(x, 1, seed) < 0.6) p.set(x, 1, 'k');
+    if (hash01(x, 2, seed) < 0.5) p.set(x, 31, '2');
+  }
+  return p;
+}
+
+export const forestWallFace = tile('forest.wallFace', [trunks(31, [7, 23]), trunks(32, [14, 29])]);
+
+/** Bramble gate (combat doors): thorny tangled vines with gaps. */
+export const forestBrambles = tile('forest.door', [
+  (() => {
+    const p = new Pix(T, T);
+    const r = new Rng(41);
+    for (let k = 0; k < 7; k++) {
+      const y0 = r.int(0, 31);
+      const y1 = r.int(0, 31);
+      p.limb(0, y0, 31, y1, 1.3, 1.3, 'd3');
+      p.line(0, y0, 31, y1, '3');
+    }
+    for (let k = 0; k < 18; k++) {
+      const x = r.int(1, 30);
+      const y = r.int(1, 30);
+      if (p.get(x, y) === '.') continue;
+      p.set(x, y - 1, 'B');
+      p.set(x + 1, y + 1, 'b');
+    }
+    return p;
+  })(),
 ]);
+
+/** Locked forest gate: woven branches with a gold lock (was the crypt door before). */
+export const forestDoorLocked = tile('forest.doorLocked', [
+  (() => {
+    const p = new Pix(T, T, 'd');
+    for (let y = 0; y < T; y += 6) {
+      p.limb(-2, y + 2, 34, y + 3, 2.4, 2.4, 'dDe');
+    }
+    for (const x of [6, 26]) p.limb(x, 0, x, 31, 2.2, 2.2, 'dDeE');
+    for (let k = 0; k < 10; k++) p.set(hash01(k, 0, 5) * T, hash01(k, 1, 5) * T, '3');
+    p.rect(11, 11, 10, 11, 'g');
+    p.rect(12, 12, 8, 9, 'G');
+    p.rect(12, 12, 8, 1, 'H');
+    p.ball(16, 15.5, 1.5, 1.5, 'K');
+    p.rect(15.5, 16, 1, 3, 'K');
+    return p;
+  })(),
+]);
+
+/** A tree standing on a solid tile (the forest's pillar). */
+export const forestTree = tile(
+  'forest.tree',
+  [
+    (() => {
+      const p = new Pix(T, 64);
+      p.ellipse(16, 60, 10, 2.6, 'k');
+      p.limb(16, 60, 16, 30, 4.2, 3.4, 'dDeE', { bias: -0.4 });
+      p.limb(16, 56, 9, 61, 1.8, 1, 'dD');
+      p.limb(16, 56, 23, 61, 1.8, 1, 'dD');
+      p.line(14, 40, 15, 52, 'd');
+      for (const [x, y, rad] of [
+        [10, 22, 8],
+        [22, 22, 8],
+        [16, 13, 9.5],
+        [16, 27, 8],
+        [8, 15, 5],
+        [24, 14, 5],
+      ] as const)
+        p.ball(x, y, rad, rad * 0.9, '2345', { dither: true, bias: 0.2 });
+      return p;
+    })(),
+  ],
+  { ox: 16, oy: 60 },
+);
+
+/** The way down in the forest: a burrow under roots. */
+export const forestBurrow = tile('forest.burrow', [
+  (() => {
+    const p = new Pix(T, T);
+    p.ellipse(16, 18, 13, 10, 'D');
+    p.ellipse(16, 18, 11, 8, 'd');
+    p.ellipse(16, 19, 9, 6.4, 'K');
+    p.limb(4, 9, 20, 7, 1.4, 1, 'dDe');
+    p.limb(14, 8, 26, 12, 1.2, 0.8, 'dDe');
+    p.limb(6, 26, 11, 28, 1, 0.6, 'e');
+    for (const [x, y] of [
+      [4, 16],
+      [27, 21],
+      [22, 28],
+    ] as const)
+      p.ball(x, y, 1.6, 1.2, 'pPq');
+    return p;
+  })(),
+]);
+
+/** Thorn trap: sprouts (safe) and extended thorns. */
+export const forestThorns = tile(
+  'forest.thorns',
+  [false, true].map((out) => {
+    const p = new Pix(T, T);
+    for (let y = 8; y < 28; y += 8)
+      for (let x = 8; x < 28; x += 8) {
+        p.ellipse(x, y + 1.5, 2.6, 1.3, 'k');
+        if (out) {
+          p.poly([x - 2, y + 1.5, x - 0.5, y - 6, x + 2, y + 1.5], '3');
+          p.line(x - 0.5, y - 5, x, y, '4');
+          p.set(x - 0.5, y - 6, 'B');
+        } else {
+          p.set(x, y, '3');
+          p.set(x - 1, y - 1, '4');
+        }
+      }
+    return p;
+  }),
+  { ox: 16, oy: 16 },
+);
+
+/** Glowing mushrooms (the forest's torches), two pulse frames. */
+export const forestGlow = tile(
+  'forest.glow',
+  [0, 1].map((f) => {
+    const p = new Pix(T, T);
+    for (const [x, y, s] of [
+      [12, 20, 1],
+      [20, 17, 1.25],
+      [17, 24, 0.8],
+    ] as const) {
+      p.limb(x, y, x, y + 6 * s, 1, 1, 'bB');
+      p.ball(x, y, 4 * s + f * 0.4, 2.6 * s, f ? 'cfFF' : 'cfF', { bias: 0.6 });
+      p.set(x - s, y - 1, 'W');
+    }
+    return p;
+  }),
+  { ox: 16, oy: 16 },
+);
+
+function flowers(seed: number, petal: string, center: string): Pix {
+  const p = new Pix(T, T);
+  const r = new Rng(seed);
+  for (let k = 0; k < 3; k++) {
+    const x = r.int(7, 25);
+    const y = r.int(10, 24);
+    p.line(x, y + 1, x + r.int(-1, 1), y + 6, '3');
+    p.set(x + 1, y + 4, '4');
+    for (const [dx, dy] of [
+      [-1.5, 0],
+      [1.5, 0],
+      [0, -1.5],
+      [0, 1.5],
+    ] as const)
+      p.ball(x + dx, y + dy, 1.4, 1.4, petal);
+    p.set(x, y, center);
+  }
+  return p;
+}
+
+export const decoFlowers = tile('forest.flowers', [
+  flowers(51, 'rR', 'G'),
+  flowers(52, 'gG', 's'),
+  flowers(53, 'vV', 'H'),
+  flowers(54, 'bB', 'G'),
+]);
+
+export const decoMushroom = tile(
+  'forest.mushroom',
+  ['rRs', 'vVu'].map((cap, i) => {
+    const p = new Pix(T, T);
+    p.ellipse(16, 26, 6, 1.4, 'k');
+    p.limb(16, 26, 16, 19, 2, 1.6, 'bB');
+    p.ball(16, 17, 6.4, 4, cap, { bias: 0.3 });
+    p.rect(9, 18, 14, 3, '.', { onlyOver: cap });
+    p.ellipse(16, 18, 6, 1.2, cap[0]!, { onlyOver: '.' });
+    p.set(14, 15, 'B');
+    p.set(18, 16, 'B');
+    if (i) p.set(16, 14, 'B');
+    return p;
+  }),
+);
+
+export const decoTuft = tile(
+  'forest.tuft',
+  [61, 62].map((seed) => {
+    const p = new Pix(T, T);
+    const r = new Rng(seed);
+    const cx = r.int(12, 20);
+    for (let k = 0; k < 7; k++) {
+      const x = cx + r.int(-5, 5);
+      const h = r.int(5, 9);
+      p.line(x, 26, x + r.int(-2, 2), 26 - h, k % 2 ? '3' : '4');
+    }
+    p.ellipse(cx, 26, 5, 1.2, '2');
+    return p;
+  }),
+);
+
+export const decoStone = tile(
+  'forest.stone',
+  [71, 72].map((seed, i) => {
+    const p = new Pix(T, T);
+    const r = new Rng(seed);
+    p.ellipse(16, 25, 8, 2, 'k');
+    p.ball(15, 21, 6.5, 5, 'pPqQ', { bias: 0.2 });
+    if (i) p.ball(24, 24, 3, 2.4, 'pPq');
+    p.ellipse(13, 18, 3, 1.4, '3', { onlyOver: 'pPqQ' });
+    p.set(13 + r.int(0, 3), 22, 'p');
+    return p;
+  }),
+);
 
 export const FOREST_TILES: SpriteDef[] = [
   forestFloor,
   forestWallTop,
   forestWallFace,
   forestBrambles,
+  forestDoorLocked,
   forestTree,
   forestBurrow,
   forestThorns,
