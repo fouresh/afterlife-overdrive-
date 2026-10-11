@@ -48,6 +48,7 @@ export interface ViewHooks {
 export class WorldView {
   private views: (View | undefined)[] = [];
   private torches: { sprite: Sprite; glow: Sprite; phase: number; speed: number }[] = [];
+  private hubLights: { sprite: Sprite; phase: number; baseAlpha: number }[] = [];
   private doors: { sprite: Sprite; i: number; locked: Sprite }[] = [];
   private statics: Container[] = [];
   private time = 0;
@@ -106,6 +107,27 @@ export class WorldView {
         s.position.set(cx, cy);
         this.r.decalLayer.addChild(s);
         this.statics.push(s);
+      }
+    }
+    // Warm pools of light make the safe hub feel lived-in without changing dungeon lighting.
+    if (this.stations.length > 0) {
+      const addHubLight = (x: number, y: number, phase: number, scale = 1.15) => {
+        const lamp = makeSprite(glow);
+        lamp.position.set(x, y);
+        lamp.tint = 0xffb56b;
+        lamp.alpha = 0.15;
+        lamp.scale.set(scale);
+        this.r.glowLayer.addChild(lamp);
+        this.hubLights.push({ sprite: lamp, phase, baseAlpha: 0.15 });
+        this.statics.push(lamp);
+      };
+      addHubLight(f.start.x * TILE + TILE / 2, f.start.y * TILE + TILE / 2, 0, 1.35);
+      for (const p of f.props) {
+        if (p.kind !== 'station' || p.v === undefined) continue;
+        const station = this.stations[p.v];
+        if (!station || station.id === 'portal' || station.id === 'altar') continue;
+        const phase = (p.x * 11 + p.y * 17) % 12;
+        addHubLight(p.x * TILE + TILE / 2, p.y * TILE + TILE / 2, phase, 1.05);
       }
     }
     const doorTex = this.atlas.get(this.tileset.door);
@@ -343,6 +365,12 @@ export class WorldView {
         torch.frames[Math.floor(this.time * t.speed + t.phase) % torch.frames.length]!;
       t.glow.alpha =
         0.3 + 0.06 * Math.sin(this.time * 9 + t.phase) + 0.03 * Math.sin(this.time * 23);
+    }
+    // Gentle, asynchronous breathing keeps hub lights warm without obvious flicker.
+    for (const light of this.hubLights) {
+      light.sprite.alpha = light.baseAlpha + 0.025 * Math.sin(this.time * 1.7 + light.phase);
+      const pulse = 1 + 0.025 * Math.sin(this.time * 1.2 + light.phase);
+      light.sprite.scale.set(light.sprite.scale.x > 0 ? pulse * (light.phase === 0 ? 1.35 : 1.05) : pulse);
     }
     // Doors
     const m = w.map;
@@ -804,6 +832,7 @@ export class WorldView {
     for (const s of this.statics) s.destroy();
     this.statics = [];
     this.torches = [];
+    this.hubLights = [];
     this.doors = [];
   }
 }
