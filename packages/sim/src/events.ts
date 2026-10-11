@@ -29,6 +29,8 @@ export const Ev = {
   Trap: 24,
   /** Player interacted with a hub station (a = station index). */
   Talk: 25,
+  /** A fallen player was revived (a = revived player, b = reviver). */
+  Revive: 26,
 } as const;
 export type Ev = (typeof Ev)[keyof typeof Ev];
 

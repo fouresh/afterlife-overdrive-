@@ -80,6 +80,26 @@ WccWcccccW.
 .WggggggW..
 .WggggggW..
 .WWWWWWWW..`,
+  party: `
+...cc.......
+..cccc..WW..
+..cccc.WWWW.
+...cc..WWWW.
+..cccc..WW..
+.cccccc.WW..
+.cccccWWWWW.
+.ccccWWWWWWW
+.ccccWWWWWWW`,
+  share: `
+.......WW.
+......WWWW
+.......WW.
+..WW..W...
+.WWWWW....
+..WW..W...
+.......WW.
+......WWWW
+.......WW.`,
   phone: `
 ..KKKKKKK..
 ..KWWWWWK..

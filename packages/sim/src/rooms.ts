@@ -57,6 +57,7 @@ function closeDoors(w: World, room: number): void {
     m.dyn[d.y * m.w + d.x] = TF.BlockWalk | TF.BlockShot;
     // Push anyone standing in the doorway into the room.
     for (const p of w.players) {
+      if (p.gone) continue;
       const tx = Math.floor(e.x[p.ent]! / TILE);
       const ty = Math.floor(e.y[p.ent]! / TILE);
       const near = Math.abs(tx - d.x) <= 0 && Math.abs(ty - d.y) <= 0;

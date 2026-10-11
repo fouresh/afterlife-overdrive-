@@ -15,7 +15,8 @@ export function Inventory({ host, onClose }: { host: GameHost; onClose: () => vo
     const id = setInterval(() => force((n) => n + 1), 150);
     return () => clearInterval(id);
   }, []);
-  const p = host.world.players[0]!;
+  const p = host.me();
+  if (!p) return null;
   const l = p.loadout;
   const atlas = host.atlas;
   const slots: [string, ItemInstance | null, string][] = [

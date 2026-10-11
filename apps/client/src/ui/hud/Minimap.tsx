@@ -18,6 +18,7 @@ export function Minimap({ host }: { host: GameHost }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let revealed = new Uint8Array(0);
+    let seenRooms = new Set<number>();
     let worldRef = host.world;
     const draw = () => {
       const w = host.world;
@@ -26,6 +27,7 @@ export function Minimap({ host }: { host: GameHost }) {
       const f = w.floor;
       if (worldRef !== w || revealed.length !== f.w * f.h) {
         revealed = new Uint8Array(f.w * f.h);
+        seenRooms = new Set();
         worldRef = w;
       }
       if (c.width !== f.w || c.height !== f.h) {
@@ -33,14 +35,18 @@ export function Minimap({ host }: { host: GameHost }) {
         c.height = f.h;
       }
       const e = w.e;
-      const p = w.players[0]!;
+      const p = host.me();
+      if (!p) return;
       const ptx = Math.floor(e.x[p.ent]! / TILE);
       const pty = Math.floor(e.y[p.ent]! / TILE);
+      // Rooms we stood in (networked worlds do not replicate `visited`).
+      const here = f.roomOf[pty * f.w + ptx];
+      if (here) seenRooms.add(here - 1);
       for (let y = Math.max(0, pty - 5); y < Math.min(f.h, pty + 6); y++)
         for (let x = Math.max(0, ptx - 5); x < Math.min(f.w, ptx + 6); x++)
           revealed[y * f.w + x] = 1;
       w.rooms.forEach((rs, ri) => {
-        if (!rs.visited) return;
+        if (!rs.visited && !seenRooms.has(ri)) return;
         const r = f.rooms[ri]!.rect;
         for (let y = r.y - 1; y <= r.y + r.h; y++)
           for (let x = r.x - 1; x <= r.x + r.w; x++) revealed[y * f.w + x] = 1;
@@ -69,6 +75,11 @@ export function Minimap({ host }: { host: GameHost }) {
           ctx.fillStyle = '#36c4b4';
           ctx.fillRect(pr.x - 1, pr.y - 1, 3, 3);
         }
+      }
+      ctx.fillStyle = '#7fe3a0';
+      for (const q of w.players) {
+        if (q === p || q.gone) continue;
+        ctx.fillRect(Math.floor(e.x[q.ent]! / TILE) - 1, Math.floor(e.y[q.ent]! / TILE) - 1, 2, 2);
       }
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(ptx - 1, pty - 1, 3, 3);

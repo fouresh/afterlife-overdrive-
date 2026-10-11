@@ -70,7 +70,8 @@ export function step(w: World, inputs: readonly PlayerInput[]): void {
   updateProps(w);
   updateLocks(w);
   updateRooms(w);
-  if (w.players.length > 0 && w.players.every((p) => p.dead && p.deathT > 50)) w.outcome = 'dead';
+  if (w.players.length > 0 && w.players.every((p) => p.gone || (p.dead && p.deathT > 50)))
+    w.outcome = 'dead';
   w.tick++;
   w.ticksPlayed++;
 }

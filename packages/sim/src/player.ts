@@ -6,12 +6,14 @@ import {
   TICK_DT,
   angleDiff,
   byteToAngle,
+  copyInput,
   datan2,
   dcos,
   deriveSeed,
   dsin,
   emptyInput,
   secToTicks,
+  type PlayerInput,
 } from '@ao/shared';
 import { lineOfSight, moveBox } from './collide';
 import { damageEnemy, dropItem, healPlayer } from './damage';
@@ -29,6 +31,7 @@ import {
   MAX_POTIONS,
   PLAYER_RADIUS,
   PLAYER_SPEED,
+  REVIVE_TICKS,
   defaultProgress,
   recomputeStats,
   statsFor,
@@ -51,6 +54,7 @@ export interface PlayerSetup {
   progress?: Progress;
   killsBy?: Record<string, number>;
   chests?: number;
+  hardcore?: boolean;
 }
 
 export function addPlayer(w: World, setup: PlayerSetup = {}): SimPlayer {
@@ -58,16 +62,26 @@ export function addPlayer(w: World, setup: PlayerSetup = {}): SimPlayer {
   const x = tileCenter(w.floor.start.x) + (index % 2) * 10 - 5 * Math.min(1, index);
   const y = tileCenter(w.floor.start.y) + (index >> 1) * 10;
   const ent = w.e.spawn(Kind.Player, x, y);
+  const p = makeSimPlayer(w, index, ent, setup);
+  w.e.team[ent] = Team.Players;
+  w.e.r[ent] = PLAYER_RADIUS;
+  w.e.maxHp[ent] = p.stats.maxHp;
+  w.e.hp[ent] = Math.min(p.stats.maxHp, setup.hp ?? p.stats.maxHp);
+  w.e.flags[ent] = EF.Body;
+  w.e.ref[ent] = index;
+  w.players.push(p);
+  return p;
+}
+
+/**
+ * Player state object without touching entities (the network client builds its mirror players
+ * with this; entity fields arrive in snapshots).
+ */
+export function makeSimPlayer(w: World, index: number, ent: number, setup: PlayerSetup): SimPlayer {
   const loadout = setup.loadout ?? emptyLoadout();
   const progress = setup.progress ?? defaultProgress();
   const stats = statsFor(loadout, progress);
-  w.e.team[ent] = Team.Players;
-  w.e.r[ent] = PLAYER_RADIUS;
-  w.e.maxHp[ent] = stats.maxHp;
-  w.e.hp[ent] = Math.min(stats.maxHp, setup.hp ?? stats.maxHp);
-  w.e.flags[ent] = EF.Body;
-  w.e.ref[ent] = index;
-  const p: SimPlayer = {
+  return {
     index,
     ent,
     progress,
@@ -106,10 +120,21 @@ export function addPlayer(w: World, setup: PlayerSetup = {}): SimPlayer {
     regenAcc: 0,
     dead: false,
     deathT: 0,
+    gone: false,
+    hardcore: setup.hardcore ?? false,
+    revive: 0,
+    buffSpeed: 0,
     lootRng: new Rng(deriveSeed(w.runSeed, 'loot', index, w.depth)),
   };
-  w.players.push(p);
-  return p;
+}
+
+/** The player left the run: remove the body (allies can no longer revive it). */
+export function removePlayer(w: World, p: SimPlayer): void {
+  const e = w.e;
+  if (e.alive[p.ent] && e.kind[p.ent] === Kind.Player && e.ref[p.ent] === p.index) e.kill(p.ent);
+  p.gone = true;
+  p.dead = true;
+  p.interact = -1;
 }
 
 const tmp = { x: 0, y: 0 };
@@ -145,12 +170,25 @@ function buffSum(p: SimPlayer, key: 'damagePct' | 'attackSpeedPct' | 'moveSpeedP
   return s;
 }
 
+// Movement intent of the current input (module scratch: no allocations per tick).
+let mvMag = 0;
+let mvX = 0;
+let mvY = 0;
+
+function intent(inp: PlayerInput): void {
+  const len = Math.sqrt(inp.mx * inp.mx + inp.my * inp.my);
+  mvMag = len > 127 ? 1 : len / 127;
+  mvX = len > 0 ? inp.mx / len : 0;
+  mvY = len > 0 ? inp.my / len : 0;
+}
+
 export function updatePlayer(w: World, p: SimPlayer): void {
   const e = w.e;
   const i = p.ent;
-  if (!e.alive[i]) return;
+  if (p.gone || !e.alive[i]) return;
   if (p.dead) {
     p.deathT++;
+    if (p.revive > 0) p.revive--;
     e.vx[i] = 0;
     e.vy[i] = 0;
     return;
@@ -158,19 +196,19 @@ export function updatePlayer(w: World, p: SimPlayer): void {
   const inp = p.input;
   const pressed = inp.buttons & ~p.prevButtons;
   p.prevButtons = inp.buttons;
-
-  const len = Math.sqrt(inp.mx * inp.mx + inp.my * inp.my);
-  const mag = len > 127 ? 1 : len / 127;
-  const dirX = len > 0 ? inp.mx / len : 0;
-  const dirY = len > 0 ? inp.my / len : 0;
-  p.moving = mag > 0;
+  intent(inp);
+  p.moving = mvMag > 0;
 
   // Timers
   if (p.attackCd > 0) p.attackCd--;
   if (p.skillCd[0] > 0) p.skillCd[0]--;
   if (p.skillCd[1] > 0) p.skillCd[1]--;
   if (p.swingT > 0) p.swingT--;
-  for (let k = p.buffs.length - 1; k >= 0; k--) if (--p.buffs[k]!.ticks <= 0) p.buffs.splice(k, 1);
+  if (p.buffs.length > 0) {
+    for (let k = p.buffs.length - 1; k >= 0; k--)
+      if (--p.buffs[k]!.ticks <= 0) p.buffs.splice(k, 1);
+    p.buffSpeed = buffSum(p, 'moveSpeedPct');
+  }
   if (p.shieldT > 0 && --p.shieldT === 0) p.shield = 0;
   if (p.stats.hpRegen > 0 && e.hp[i]! < e.maxHp[i]!) {
     p.regenAcc += p.stats.hpRegen * TICK_DT;
@@ -180,14 +218,66 @@ export function updatePlayer(w: World, p: SimPlayer): void {
     }
   }
 
-  // Aim: mouse → explicit; otherwise auto-aim at the nearest enemy, else the movement direction.
+  const target = aim(w, p, inp);
+  dashTick(w, p, pressed);
+
+  if (inp.buttons & Btn.Attack && p.attackCd === 0) attack(w, p, target);
+  if (pressed & Btn.Skill1) useSkill(w, p, 0, target);
+  if (pressed & Btn.Skill2) useSkill(w, p, 1, target);
+  if (pressed & Btn.Potion && p.potions > 0 && e.hp[i]! < e.maxHp[i]!) {
+    p.potions--;
+    healPlayer(w, p, Math.round(e.maxHp[i]! * 0.4));
+  }
+  updateInteract(w, p);
+  const j = p.interact;
+  if (j >= 0 && e.kind[j] === Kind.Player) {
+    if (inp.buttons & Btn.Interact) reviveTick(w, p, j);
+  } else if (pressed & Btn.Interact && j >= 0) interact(w, p, j);
+
+  if (p.dashT > 0 && p.dashDamage > 0) dashHits(w, p);
+  moveBody(w, p);
+}
+
+/**
+ * Client-side prediction of the local player: the movement part of updatePlayer() plus the
+ * per-entity prelude of step(). Same code as the server, so replaying unacknowledged inputs
+ * from the last authoritative state lands exactly where the server will (barring knockback
+ * and other things only the server knows).
+ */
+export function predictPlayer(w: World, p: SimPlayer, inp: PlayerInput): void {
+  const e = w.e;
+  const i = p.ent;
+  e.px[i] = e.x[i]!;
+  e.py[i] = e.y[i]!;
+  e.kx[i] = e.kx[i]! * 0.78;
+  e.ky[i] = e.ky[i]! * 0.78;
+  if (Math.abs(e.kx[i]!) < 1) e.kx[i] = 0;
+  if (Math.abs(e.ky[i]!) < 1) e.ky[i] = 0;
+  if (e.slowT[i]! > 0) e.slowT[i]!--;
+  if (p.dead || p.gone) return;
+  copyInput(p.input, inp);
+  const pressed = inp.buttons & ~p.prevButtons;
+  p.prevButtons = inp.buttons;
+  intent(inp);
+  p.moving = mvMag > 0;
+  aim(w, p, inp);
+  dashTick(w, p, pressed);
+  moveBody(w, p);
+}
+
+/** Aim: mouse → explicit; otherwise auto-aim at the nearest enemy, else the movement direction. */
+function aim(w: World, p: SimPlayer, inp: PlayerInput): number {
+  const e = w.e;
+  const i = p.ent;
   const target = nearestEnemy(w, e.x[i]!, e.y[i]!, AUTO_AIM_RANGE);
   if (inp.buttons & Btn.ManualAim) p.aim = byteToAngle(inp.aim);
   else if (target >= 0) p.aim = datan2(e.y[target]! - e.y[i]!, e.x[target]! - e.x[i]!);
-  else if (mag > 0) p.aim = datan2(dirY, dirX);
+  else if (mvMag > 0) p.aim = datan2(mvY, mvX);
   e.face[i] = p.aim;
+  return target;
+}
 
-  // Dash charges
+function dashTick(w: World, p: SimPlayer, pressed: number): void {
   if (p.dashCharges < p.stats.dashCharges) {
     if (++p.dashRecharge >= DASH_RECHARGE_TICKS) {
       p.dashRecharge = 0;
@@ -199,37 +289,28 @@ export function updatePlayer(w: World, p: SimPlayer): void {
     startDash(
       w,
       p,
-      mag > 0 ? dirX : dcos(p.aim),
-      mag > 0 ? dirY : dsin(p.aim),
+      mvMag > 0 ? mvX : dcos(p.aim),
+      mvMag > 0 ? mvY : dsin(p.aim),
       DASH_TICKS,
       DASH_SPEED,
       0,
     );
-    e.iframes[i] = Math.max(e.iframes[i]!, DASH_IFRAMES);
+    w.e.iframes[p.ent] = Math.max(w.e.iframes[p.ent]!, DASH_IFRAMES);
   }
+}
 
-  if (inp.buttons & Btn.Attack && p.attackCd === 0) attack(w, p, target);
-  if (pressed & Btn.Skill1) useSkill(w, p, 0, target);
-  if (pressed & Btn.Skill2) useSkill(w, p, 1, target);
-  if (pressed & Btn.Potion && p.potions > 0 && e.hp[i]! < e.maxHp[i]!) {
-    p.potions--;
-    healPlayer(w, p, Math.round(e.maxHp[i]! * 0.4));
-  }
-  updateInteract(w, p);
-  if (pressed & Btn.Interact && p.interact >= 0) interact(w, p, p.interact);
-
-  // Movement
+function moveBody(w: World, p: SimPlayer): void {
+  const e = w.e;
+  const i = p.ent;
   if (p.dashT > 0) {
     p.dashT--;
     e.vx[i] = p.dashDx * p.dashSpeed;
     e.vy[i] = p.dashDy * p.dashSpeed;
-    if (p.dashDamage > 0) dashHits(w, p);
   } else {
     const slow = e.slowT[i]! > 0 ? 0.55 : 1;
-    const speed =
-      PLAYER_SPEED * (1 + (p.stats.moveSpeedPct + buffSum(p, 'moveSpeedPct')) / 100) * slow;
-    const tvx = dirX * mag * speed;
-    const tvy = dirY * mag * speed;
+    const speed = PLAYER_SPEED * (1 + (p.stats.moveSpeedPct + p.buffSpeed) / 100) * slow;
+    const tvx = mvX * mvMag * speed;
+    const tvy = mvY * mvMag * speed;
     e.vx[i] = e.vx[i]! + (tvx - e.vx[i]!) * 0.6;
     e.vy[i] = e.vy[i]! + (tvy - e.vy[i]!) * 0.6;
   }
@@ -238,6 +319,27 @@ export function updatePlayer(w: World, p: SimPlayer): void {
   moveBox(w.map, e.x[i]!, e.y[i]!, e.r[i]!, dx, dy, TF.BlockWalk, tmp);
   e.x[i] = tmp.x;
   e.y[i] = tmp.y;
+}
+
+/** An ally holds Interact over a fallen player: +1 net progress per tick (decay is 1/tick). */
+function reviveTick(w: World, p: SimPlayer, j: number): void {
+  const q = w.players[w.e.ref[j]!];
+  if (!q || !q.dead || q.gone || q.hardcore) return;
+  q.revive += 2;
+  if (q.revive >= REVIVE_TICKS) revivePlayer(w, q, p.index);
+}
+
+export function revivePlayer(w: World, q: SimPlayer, by: number): void {
+  const e = w.e;
+  const i = q.ent;
+  q.dead = false;
+  q.deathT = 0;
+  q.revive = 0;
+  q.dashT = 0;
+  e.flags[i] = e.flags[i]! & ~EF.Dying;
+  e.hp[i] = Math.max(1, Math.ceil(e.maxHp[i]! * 0.3));
+  e.iframes[i] = 60;
+  w.events.push(Ev.Revive, e.x[i]!, e.y[i]!, q.index, by);
 }
 
 function startDash(
@@ -497,6 +599,7 @@ function useSkill(w: World, p: SimPlayer, slot: 0 | 1, target: number): void {
           ticks: secToTicks(fx.duration),
           color: fx.color,
         });
+        p.buffSpeed = buffSum(p, 'moveSpeedPct');
         break;
       case 'heal':
         healPlayer(w, p, Math.round((e.maxHp[p.ent]! * fx.pctMaxHp * power) / 100));
@@ -530,7 +633,11 @@ function updateInteract(w: World, p: SimPlayer): void {
   for (let j = 0; j < e.hi; j++) {
     if (!e.alive[j]) continue;
     const k = e.kind[j];
-    if (k === Kind.Pickup) {
+    if (k === Kind.Player) {
+      // Fallen allies can be revived (not hardcore heroes).
+      const q = w.players[e.ref[j]!];
+      if (!q || q === p || !q.dead || q.gone || q.hardcore) continue;
+    } else if (k === Kind.Pickup) {
       if (e.def[j] !== PickupKind.Item) continue;
       if (e.owner[j]! >= 0 && e.owner[j] !== p.index) continue;
     } else if (k === Kind.Prop) {

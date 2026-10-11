@@ -1,7 +1,9 @@
 import { contentRu } from '@ao/content';
 import { DIFFICULTIES, type Difficulty } from '@ao/sim';
 import { useState } from 'preact/hooks';
+import { party } from '../../../net/party';
 import { Panel, useCtx, type PanelCtx } from './common';
+import { useParty } from './PartyPanel';
 
 const NAMES: Record<Difficulty, string> = {
   normal: 'Обычная',
@@ -25,6 +27,11 @@ export function PortalPanel({
 }) {
   const { c } = useCtx(ctx);
   const [diff, setDiff] = useState<Difficulty>('normal');
+  const pst = useParty();
+  const inParty = pst.code !== null && pst.status === 'online';
+  // A party is limited by its lowest level.
+  const minLevel = inParty ? Math.min(c.level, ...pst.members.map((m) => m.level)) : c.level;
+  const leader = pst.members.find((m) => m.slot === pst.leader);
   return (
     <Panel title="Портал" subtitle={'Глава 1 · "Пробуждение"'} onClose={onClose}>
       <div class="inv__label">Куда</div>
@@ -36,7 +43,7 @@ export function PortalPanel({
       </div>
       <div class="inv__label">Сложность</div>
       {(Object.keys(DIFFICULTIES) as Difficulty[]).map((d) => {
-        const locked = c.level < DIFFICULTIES[d].minLevel;
+        const locked = minLevel < DIFFICULTIES[d].minLevel;
         return (
           <button
             key={d}
@@ -59,9 +66,35 @@ export function PortalPanel({
         С собой: зелий {c.potions}/3{c.elixir ? ` · ${contentRu[`elixir.${c.elixir}`]}` : ''}
         {c.hardcore ? ' · ☠ смерть навсегда' : ''}
       </div>
-      <button class="btn btn--primary" data-testid="btn-go" onClick={() => onStart('crypt', diff)}>
-        Отправиться
-      </button>
+      {!inParty && (
+        <button
+          class="btn btn--primary"
+          data-testid="btn-go"
+          onClick={() => onStart('crypt', diff)}
+        >
+          Отправиться
+        </button>
+      )}
+      {inParty && party.isLeader && (
+        <button
+          class="btn btn--primary"
+          data-testid="btn-go-party"
+          disabled={pst.phase === 'run'}
+          onClick={() => {
+            party.send({ t: 'start', biome: 'crypt', difficulty: diff });
+            onClose();
+          }}
+        >
+          {pst.phase === 'run'
+            ? 'Отряд уже в забеге'
+            : `Отправиться отрядом (${pst.members.filter((m) => m.online).length})`}
+        </button>
+      )}
+      {inParty && !party.isLeader && (
+        <div class="statline">
+          Портал откроет лидер — {leader?.name ?? '?'}. Чтобы пойти одному, покиньте отряд.
+        </div>
+      )}
     </Panel>
   );
 }
