@@ -602,18 +602,40 @@ button {
     opacity: 0;
   }
 }
-.interact-label {
+/* Interaction label over the object in the world (positioned by GameHost.updatePrompt). */
+.wprompt {
   position: absolute;
-  right: calc(var(--safe-r) + 14px);
-  bottom: calc(var(--safe-b) + 222px);
-  max-width: 260px;
-  padding: 3px 8px;
-  font-size: 15px;
+  left: 0;
+  top: 0;
+  z-index: 8;
+  max-width: min(320px, 70vw);
+  padding: 2px 8px 3px;
+  font-size: 14px;
   font-weight: 700;
-  background: rgba(13, 10, 18, 0.75);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(13, 10, 18, 0.82);
   border: 1px solid #3b2f5c;
+  border-radius: 3px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
   pointer-events: none;
-  text-align: right;
+  will-change: transform;
+}
+.wprompt[hidden] {
+  display: none;
+}
+/* Small pointer under the label, towards the object. */
+.wprompt::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-bottom: 0;
+  border-top-color: #3b2f5c;
 }
 .cbtn__img {
   width: 70%;
@@ -693,12 +715,6 @@ button {
   font-size: 16px;
   color: var(--text-dim);
   margin-left: 8px;
-}
-.dbar__prompt {
-  font-size: 16px;
-  font-weight: 700;
-  padding: 2px 8px;
-  background: rgba(13, 10, 18, 0.75);
 }
 
 /* ---------- Item icons & screens ---------- */
@@ -2139,9 +2155,7 @@ textarea:focus-visible {
     margin: -21px 0 0 -21px;
   }
 
-  .interact-label {
-    bottom: calc(var(--safe-b) + 180px);
-    max-width: 34vw;
+  .wprompt {
     font-size: 12px;
   }
 

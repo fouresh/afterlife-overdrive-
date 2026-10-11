@@ -195,6 +195,13 @@ export class GameHost {
   /** Hub stations (by station prop ref) when in hub mode. */
   stations: HubStation[] = [];
   private npcSheets = new Map<number, Sheet>();
+  /** DOM label of the current interaction, floated over the object (see updatePrompt). */
+  private promptEl: HTMLElement | null = null;
+  private promptPrefix = '';
+  private promptText = '';
+  private promptW = 0;
+  private promptH = 0;
+  private anchor = { x: 0, y: 0 };
   private cfg: RunConfig = { seed: 1, biome: 'crypt', floors: 3 };
 
   constructor(
@@ -381,6 +388,47 @@ export class GameHost {
     if (p) p.lookVersion++;
   }
 
+  /**
+   * Element that shows the interaction label over the object in the world. The host positions
+   * it every frame (no Preact render per frame). `prefix` = key hint on desktop ("F — ").
+   */
+  setPromptElement(el: HTMLElement | null, prefix = ''): void {
+    this.promptEl = el;
+    this.promptPrefix = prefix;
+    this.promptText = '';
+    if (el) el.hidden = true;
+  }
+
+  private updatePrompt(): void {
+    const el = this.promptEl;
+    if (!el) return;
+    const it = this.hud.interact;
+    const p = this.world.players[this.localIndex];
+    if (!it || !p || p.interact < 0 || !this.view?.anchorAbove(p.interact, this.anchor)) {
+      if (!el.hidden) el.hidden = true;
+      return;
+    }
+    const text = this.promptPrefix + it.label;
+    if (el.hidden) el.hidden = false;
+    if (text !== this.promptText) {
+      this.promptText = text;
+      el.textContent = text;
+      el.style.color = it.color;
+      this.promptW = el.offsetWidth;
+      this.promptH = el.offsetHeight;
+    }
+    const v = this.renderer.viewport;
+    const k = v.scale / v.dpr; // CSS px per world px
+    const sw = window.innerWidth;
+    const half = this.promptW / 2;
+    const x = Math.min(
+      sw - half - 6,
+      Math.max(half + 6, (this.anchor.x + this.renderer.world.x) * k),
+    );
+    const y = Math.max(this.promptH + 52, (this.anchor.y + this.renderer.world.y) * k - 4);
+    el.style.transform = `translate(${Math.round(x - half)}px, ${Math.round(y - this.promptH)}px)`;
+  }
+
   /** The player this device controls. */
   me() {
     return this.world.players[this.localIndex];
@@ -493,6 +541,7 @@ export class GameHost {
     this.fx.update(this.paused ? 0 : dt);
     this.renderer.render();
     this.updateHud();
+    this.updatePrompt();
     this.stats.tick = w.tick;
     this.stats.entities = w.e.countAlive();
     if (w.outcome !== this.reportedOutcome) {
@@ -570,6 +619,7 @@ export class GameHost {
     this.fx.update(dt);
     this.renderer.render();
     this.updateHud();
+    this.updatePrompt();
     this.stats.tick = w.tick;
     this.stats.entities = e.countAlive();
     const s = net.stats;

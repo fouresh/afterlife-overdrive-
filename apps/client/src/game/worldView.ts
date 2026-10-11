@@ -261,6 +261,24 @@ export class WorldView {
     return { gen: e.gen[i]!, kind, root, body, shadow, glow, extra, weapon, entry };
   }
 
+  /**
+   * World point just above the drawn sprite of entity `i` (for labels floating over it).
+   * Uses the view as last synced, so the label moves exactly with what is on screen.
+   */
+  anchorAbove(i: number, out: { x: number; y: number }): boolean {
+    const v = this.views[i];
+    if (!v || v.gen !== this.world.e.gen[i]) return false;
+    const top = (s: Sprite | undefined) =>
+      s && s.visible
+        ? s.y - s.anchor.y * s.texture.height * Math.abs(s.scale.y)
+        : Number.POSITIVE_INFINITY;
+    let t = Math.min(top(v.body), top(v.extra));
+    if (!Number.isFinite(t)) t = -12;
+    out.x = v.root.x;
+    out.y = v.root.y + t;
+    return true;
+  }
+
   private destroyView(v: View): void {
     v.glow?.destroy();
     v.root.destroy({ children: true });

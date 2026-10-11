@@ -65,10 +65,60 @@ export function blitSprite(
   }
 }
 
+/**
+ * Texels per world pixel of everything on screen. Sprites are rasterized at this density (HD art
+ * as drawn, legacy art upscaled) and the renderer draws the world at the same density, so one
+ * texel is one canvas pixel. World coordinates (tiles, sim, net) do not change.
+ */
+export const ART_RES = 2;
+
+/** Frame size and pivot of a sprite in atlas texels (ART_RES density). */
+export function spriteBox(def: SpriteDef): { w: number; h: number; ox: number; oy: number } {
+  const res = def.res ?? 1;
+  const k = ART_RES / res;
+  return {
+    w: def.w * k,
+    h: def.h * k,
+    ox: (def.ox ?? def.w / 2) * k,
+    // Default pivot: bottom-center, one world pixel above the bottom edge (the feet).
+    oy: (def.oy ?? def.h - res) * k,
+  };
+}
+
+/** Rasterize one frame at ART_RES density (with the ink outline when the sprite asks for it). */
 export function rasterize(def: SpriteDef, frame: number, slots?: SlotColors): RgbaImage {
-  const img = createImage(def.w, def.h);
+  let img = createImage(def.w, def.h);
   blitSprite(img, def, frame, 0, 0, slots);
+  if ((def.res ?? 1) < ART_RES) img = scale2x(img);
   return def.outline ? outline(img, '#1b1325') : img;
+}
+
+/**
+ * Scale2x (EPX): doubles pixel art, rounding diagonal steps instead of making 2×2 blocks.
+ * Used for legacy low-res sprites and low-res PNG overrides.
+ */
+export function scale2x(src: RgbaImage): RgbaImage {
+  const { w, h } = src;
+  const s32 = new Uint32Array(src.data.buffer, src.data.byteOffset, w * h);
+  const out = createImage(w * 2, h * 2);
+  const o32 = new Uint32Array(out.data.buffer);
+  const at = (x: number, y: number, p: number) =>
+    x < 0 || y < 0 || x >= w || y >= h ? p : s32[y * w + x]!;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = s32[y * w + x]!;
+      const a = at(x, y - 1, p);
+      const b = at(x + 1, y, p);
+      const c = at(x - 1, y, p);
+      const d = at(x, y + 1, p);
+      const o = y * 2 * (w * 2) + x * 2;
+      o32[o] = c === a && c !== d && a !== b ? a : p;
+      o32[o + 1] = a === b && a !== c && b !== d ? b : p;
+      o32[o + w * 2] = d === c && d !== b && c !== a ? c : p;
+      o32[o + w * 2 + 1] = b === d && b !== a && d !== c ? d : p;
+    }
+  }
+  return out;
 }
 
 /** Copy of an image where every opaque pixel becomes white (hit flash). */

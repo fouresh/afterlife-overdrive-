@@ -17,6 +17,12 @@ export interface SpriteDef {
   frames: string[][];
   /** Add a 1px ink outline around opaque pixels when rasterizing (keep a 1px empty border). */
   outline?: boolean;
+  /**
+   * Texels per world pixel the frames are drawn at: 2 = HD art (a 16 px tile is 32×32 texels),
+   * 1 (default) = legacy low-res art, upscaled ×2 with Scale2x at rasterization. `w`, `h`, `ox`,
+   * `oy` are in the sprite's own texels.
+   */
+  res?: 1 | 2;
 }
 
 /** Turn a template literal into rows: trims each line and drops empty lines. */
@@ -33,7 +39,7 @@ export function sprite(
   h: number,
   pal: Record<string, string>,
   frames: string[],
-  pivot?: { ox?: number; oy?: number; outline?: boolean },
+  pivot?: { ox?: number; oy?: number; outline?: boolean; res?: 1 | 2 },
 ): SpriteDef {
   return { id, w, h, pal, frames: frames.map(px), ...pivot };
 }

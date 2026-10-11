@@ -1,16 +1,19 @@
+import { ART_RES } from '@ao/content';
 import { TILE } from '@ao/shared';
 
 /**
- * Low internal resolution + integer upscale. The canvas backing store is tiny (≈ 240 px tall) and
- * the browser compositor scales it with nearest-neighbour, so a DPR-3 phone still renders only
- * ~120k pixels per frame. Each logical pixel is exactly `scale` device pixels.
+ * Low internal resolution + integer upscale. The world is ~15 tiles (≈ 240 world px) tall and is
+ * drawn at ART_RES canvas pixels per world pixel (one canvas pixel = one sprite texel), so the
+ * canvas is ≈ 480 px tall; the browser compositor scales it with nearest-neighbour. Every texel
+ * is exactly `scale / ART_RES` device pixels — a whole number, so pixel art never shimmers.
  */
 export interface Viewport {
   cssW: number;
   cssH: number;
   dpr: number;
-  /** Device pixels per logical pixel (integer). */
+  /** Device pixels per world pixel (a whole multiple of ART_RES). */
   scale: number;
+  /** Visible world size in world pixels (the canvas is ART_RES times larger). */
   logicalW: number;
   logicalH: number;
   portrait: boolean;
@@ -25,7 +28,12 @@ export function computeViewport(cssW: number, cssH: number, dpr: number): Viewpo
   const portrait = devH > devW;
   // In portrait we size by the short side so the rotate-hint background still looks right.
   const ref = portrait ? devW : devH;
-  const scale = Math.max(1, Math.round(ref / (TARGET_TILES_H * TILE)));
+  // Device pixels per texel: a whole number, chosen geometrically closest to the target height
+  // (a 720 px screen gets 11 tiles rather than 22, a 1170 px one 18 rather than 12).
+  const ideal = ref / (TARGET_TILES_H * TILE * ART_RES);
+  const lo = Math.max(1, Math.floor(ideal));
+  const texel = ideal / lo <= (lo + 1) / ideal ? lo : lo + 1;
+  const scale = texel * ART_RES;
   return {
     cssW,
     cssH,

@@ -1,5 +1,7 @@
 import {
+  ART_RES,
   CHAR_ANIMS,
+  CHAR_ANIM_FPS,
   CHAR_H,
   CHAR_W,
   composeCharacter,
@@ -8,7 +10,10 @@ import {
 } from '@ao/content';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 
-/** Animated paper-doll preview drawn on a small canvas (CSS-scaled with nearest neighbour). */
+/**
+ * Animated paper-doll preview drawn on a small canvas (CSS-scaled with nearest neighbour).
+ * `scale` = CSS pixels per world pixel (the frames are ART_RES texels per world pixel).
+ */
 export function CharPreview(props: {
   appearance: Appearance;
   look?: EquipLook;
@@ -34,7 +39,7 @@ export function CharPreview(props: {
       k++;
     };
     draw();
-    const id = setInterval(draw, props.anim === 'run' ? 110 : 450);
+    const id = setInterval(draw, 1000 / CHAR_ANIM_FPS[props.anim ?? 'idle']);
     return () => clearInterval(id);
   }, [frames, props.anim]);
   const scale = props.scale ?? 4;
@@ -45,8 +50,8 @@ export function CharPreview(props: {
       height={CHAR_H}
       class={props.class}
       style={{
-        width: `${CHAR_W * scale}px`,
-        height: `${CHAR_H * scale}px`,
+        width: `${(CHAR_W * scale) / ART_RES}px`,
+        height: `${(CHAR_H * scale) / ART_RES}px`,
         imageRendering: 'pixelated',
         transform: props.flip ? 'scaleX(-1)' : undefined,
       }}
