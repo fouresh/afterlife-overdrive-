@@ -156,6 +156,39 @@ function activate(w: World, room: number, by: number): void {
   if (spawnWave(w, room, 0) === 0) clear(w, room);
 }
 
+/**
+ * Where a cleared room drops its pickups: the room centre, or the nearest plain floor tile when
+ * the centre is a pit, a pillar or a spike trap. A pickup is collected within 10px, but a body
+ * stops at least 13px from the centre of a pit tile, so a key dropped over a pit could never be
+ * picked up (the locked vault and the captive behind it stayed closed).
+ */
+function dropSpot(w: World, room: number): { x: number; y: number } {
+  const r = w.floor.rooms[room]!.rect;
+  const cx = (r.x + r.w / 2) * TILE;
+  const cy = (r.y + r.h / 2) * TILE;
+  const m = w.map;
+  const spikes = new Set<number>();
+  for (const p of w.floor.props) if (p.kind === 'spikes') spikes.add(p.y * m.w + p.x);
+  const plain = (tx: number, ty: number) =>
+    m.tiles[ty * m.w + tx] === Tile.Floor && !spikes.has(ty * m.w + tx);
+  if (plain(Math.floor(cx / TILE), Math.floor(cy / TILE))) return { x: cx, y: cy };
+  let best = { x: cx, y: cy };
+  let bestD = Infinity;
+  for (let ty = r.y; ty < r.y + r.h; ty++) {
+    for (let tx = r.x; tx < r.x + r.w; tx++) {
+      if (!plain(tx, ty)) continue;
+      const dx = (tx + 0.5) * TILE - cx;
+      const dy = (ty + 0.5) * TILE - cy;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = { x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE };
+      }
+    }
+  }
+  return best;
+}
+
 function clear(w: World, room: number): void {
   const rs = w.rooms[room]!;
   rs.state = 2;
@@ -165,12 +198,13 @@ function clear(w: World, room: number): void {
   const cy = (r.y + r.h / 2) * TILE;
   w.events.push(Ev.DoorsOpen, cx, cy, room);
   w.events.push(Ev.RoomCleared, cx, cy, room);
+  const spot = dropSpot(w, room);
   if (room === w.floor.keyRoom)
-    spawnPickup(w, PickupKind.Key, cx, cy, { item: null, amount: 1, owner: -1 });
+    spawnPickup(w, PickupKind.Key, spot.x, spot.y, { item: null, amount: 1, owner: -1 });
   if (room === w.floor.lastRoom) {
     if (w.floor.isLast) {
-      const ex = Math.floor(cx / TILE);
-      const ey = Math.floor(cy / TILE);
+      const ex = Math.floor(spot.x / TILE);
+      const ey = Math.floor(spot.y / TILE);
       spawnProp(w, PropKind.Portal, ex, ey, -1, room);
     } else {
       w.stairsOpen = true;
@@ -180,10 +214,14 @@ function clear(w: World, room: number): void {
   for (const p of w.players) {
     if (p.dead) continue;
     if (w.rng.chance(0.25))
-      spawnPickup(w, PickupKind.Potion, cx, cy, { item: null, amount: 1, owner: p.index });
+      spawnPickup(w, PickupKind.Potion, spot.x, spot.y, {
+        item: null,
+        amount: 1,
+        owner: p.index,
+      });
     if (w.rng.chance(0.08)) {
       // Rare bonus item for clearing a room.
-      spawnPickup(w, PickupKind.Gold, cx, cy, {
+      spawnPickup(w, PickupKind.Gold, spot.x, spot.y, {
         item: null,
         amount: 5 + w.depth * 3,
         owner: p.index,
