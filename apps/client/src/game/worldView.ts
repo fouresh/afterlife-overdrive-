@@ -491,7 +491,8 @@ export class WorldView {
     } else {
       v.phase += dt * CHAR_ANIM_FPS.idle;
       const idle = CHAR_ANIMS.idle;
-      idx = idle[Math.floor(v.phase) % idle.length]!;
+      // The run cycle can leave a negative phase (backpedal); keep the index in range.
+      idx = idle[((Math.floor(v.phase) % idle.length) + idle.length) % idle.length]!;
     }
     const flash = e.hitFlash[i]! > 0;
     v.body.texture = (flash ? v.entry.flash : v.entry.frames)[idx]!;
