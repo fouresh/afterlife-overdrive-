@@ -14,9 +14,16 @@ import {
   syncMarket,
   upgrade,
 } from './account';
-import { rollItem, starterItem } from './items';
+import { itemValue, rollItem, starterItem } from './items';
 import { addXp, xpToNext } from './progression';
-import { AccountSaveSchema, createCharacter, migrateSave, newSave, realmOf } from './save';
+import {
+  AccountSaveSchema,
+  STASH_SIZE,
+  createCharacter,
+  migrateSave,
+  newSave,
+  realmOf,
+} from './save';
 
 const NOW = 1_800_000_000_000;
 
@@ -94,6 +101,30 @@ describe('account operations', () => {
     expect(c.loadout.weapon!.base).toBe('bow.short');
     expect(realmOf(save, c).gold).toBe(55);
     expect(c.dead).toBe(false);
+  });
+
+  it('a full stash never loses stored items: run loot that does not fit is sold', () => {
+    const { save, c } = setup();
+    const r = realmOf(save, c);
+    r.stash = Array.from({ length: STASH_SIZE - 1 }, (_, k) => rollItem(1000 + k, 2, 1));
+    const stored = r.stash.map((x) => x.uid);
+    const carry = runSetup(c);
+    const loot = [rollItem(7, 3, 2), rollItem(8, 3, 2), rollItem(9, 3, 2)];
+    carry.bag = loot;
+    carry.gold = 10;
+    const res = applyRunResult(
+      save,
+      c,
+      { outcome: 'left', carry, depth: 1, bossKilled: false, seconds: 30 },
+      NOW,
+    );
+    expect(r.stash).toHaveLength(STASH_SIZE);
+    // Every item that was already stored is still there; the first loot item took the free slot.
+    for (const uid of stored) expect(r.stash.some((x) => x.uid === uid)).toBe(true);
+    expect(r.stash[0]!.uid).toBe(loot[0]!.uid);
+    const sold = itemValue(loot[1]!) + itemValue(loot[2]!);
+    expect(res.gold).toBe(10 + sold);
+    expect(r.gold).toBe(10 + sold);
   });
 
   it('hardcore death is permanent and uses a separate realm', () => {

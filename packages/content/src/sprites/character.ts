@@ -9,14 +9,23 @@ import { sprite, type SlotColors, type SpriteDef } from './types';
  */
 
 export const CHAR_W = 16;
-export const CHAR_H = 24;
+/** Height of every paper-doll layer sprite. */
+export const LAYER_H = 24;
+/**
+ * Empty rows above the composed frame. The run bounce lifts the body 1px, and the hair/helmet
+ * would then touch the top edge, where the ink outline gets clipped (the head outline flickered
+ * in half of the run frames).
+ */
+export const CHAR_PAD_TOP = 1;
+/** Height of a composed frame. */
+export const CHAR_H = LAYER_H + CHAR_PAD_TOP;
 /** Feet pivot. */
 export const CHAR_OX = 8;
-export const CHAR_OY = 22;
+export const CHAR_OY = 22 + CHAR_PAD_TOP;
 
 const skinPal = { s: '@skin', S: '@skin2' };
 
-export const headLayer = sprite('char.head', CHAR_W, CHAR_H, skinPal, [
+export const headLayer = sprite('char.head', CHAR_W, LAYER_H, skinPal, [
   `
   ................
   ................
@@ -45,7 +54,7 @@ export const headLayer = sprite('char.head', CHAR_W, CHAR_H, skinPal, [
   `,
 ]);
 
-export const eyesLayerM = sprite('char.eyes.m', CHAR_W, CHAR_H, { k: C.ink, e: '@eye' }, [
+export const eyesLayerM = sprite('char.eyes.m', CHAR_W, LAYER_H, { k: C.ink, e: '@eye' }, [
   `
   ................
   ................
@@ -74,7 +83,7 @@ export const eyesLayerM = sprite('char.eyes.m', CHAR_W, CHAR_H, { k: C.ink, e: '
   `,
 ]);
 
-export const eyesLayerF = sprite('char.eyes.f', CHAR_W, CHAR_H, { k: C.ink, e: '@eye' }, [
+export const eyesLayerF = sprite('char.eyes.f', CHAR_W, LAYER_H, { k: C.ink, e: '@eye' }, [
   `
   ................
   ................
@@ -105,7 +114,7 @@ export const eyesLayerF = sprite('char.eyes.f', CHAR_W, CHAR_H, { k: C.ink, e: '
 
 const clothPal = { c: '@cloth', C: '@cloth2' };
 
-export const torsoM = sprite('char.torso.m', CHAR_W, CHAR_H, clothPal, [
+export const torsoM = sprite('char.torso.m', CHAR_W, LAYER_H, clothPal, [
   `
   ................
   ................
@@ -134,7 +143,7 @@ export const torsoM = sprite('char.torso.m', CHAR_W, CHAR_H, clothPal, [
   `,
 ]);
 
-export const torsoF = sprite('char.torso.f', CHAR_W, CHAR_H, clothPal, [
+export const torsoF = sprite('char.torso.f', CHAR_W, LAYER_H, clothPal, [
   `
   ................
   ................
@@ -189,7 +198,7 @@ const legTop = (rows: string) =>
   `;
 
 /** Frames: 0 idle, 1..4 run cycle. */
-export const legsLayer = sprite('char.legs', CHAR_W, CHAR_H, legPal, [
+export const legsLayer = sprite('char.legs', CHAR_W, LAYER_H, legPal, [
   legTop(`
   ....pppppppp....
   ....ppp..ppp....
@@ -233,7 +242,7 @@ const hairRows = (rows: string) => {
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
-  while (lines.length < CHAR_H) lines.push('................');
+  while (lines.length < LAYER_H) lines.push('................');
   return lines.join('\n');
 };
 
@@ -241,7 +250,7 @@ export const HAIR_STYLES = ['short', 'spiky', 'long', 'ponytail', 'bob', 'bun', 
 export type HairStyle = (typeof HAIR_STYLES)[number];
 
 export const hairLayers: Record<Exclude<HairStyle, 'bald'>, SpriteDef> = {
-  short: sprite('char.hair.short', CHAR_W, CHAR_H, hairPal, [
+  short: sprite('char.hair.short', CHAR_W, LAYER_H, hairPal, [
     hairRows(`
     ................
     .....hhhhh......
@@ -254,7 +263,7 @@ export const hairLayers: Record<Exclude<HairStyle, 'bald'>, SpriteDef> = {
     ..H.............
     `),
   ]),
-  spiky: sprite('char.hair.spiky', CHAR_W, CHAR_H, hairPal, [
+  spiky: sprite('char.hair.spiky', CHAR_W, LAYER_H, hairPal, [
     hairRows(`
     ................
     ....h.hh.hh.....
@@ -266,7 +275,7 @@ export const hairLayers: Record<Exclude<HairStyle, 'bald'>, SpriteDef> = {
     ..hH............
     `),
   ]),
-  long: sprite('char.hair.long', CHAR_W, CHAR_H, hairPal, [
+  long: sprite('char.hair.long', CHAR_W, LAYER_H, hairPal, [
     hairRows(`
     ................
     .....hhhhh......
@@ -283,21 +292,21 @@ export const hairLayers: Record<Exclude<HairStyle, 'bald'>, SpriteDef> = {
     ...H............
     `),
   ]),
-  ponytail: sprite('char.hair.ponytail', CHAR_W, CHAR_H, hairPal, [
+  ponytail: sprite('char.hair.ponytail', CHAR_W, LAYER_H, hairPal, [
     hairRows(`
     ................
     .....hhhhh......
     ...hhhhhhhhh....
     ..hhhhhhhhhhh...
     .hhhhhhhhhhhhh..
-    hhhhHhhhhhhhh...
-    hH.HH.....h.h...
-    hH..H...........
-    hH..............
-    .H..............
+    .hhhHhhhhhhhh...
+    .hHHH.....h.h...
+    .hH.H...........
+    .hH.............
+    ..H.............
     `),
   ]),
-  bob: sprite('char.hair.bob', CHAR_W, CHAR_H, hairPal, [
+  bob: sprite('char.hair.bob', CHAR_W, LAYER_H, hairPal, [
     hairRows(`
     ................
     .....hhhhh......
@@ -311,7 +320,7 @@ export const hairLayers: Record<Exclude<HairStyle, 'bald'>, SpriteDef> = {
     ..HHH...........
     `),
   ]),
-  bun: sprite('char.hair.bun', CHAR_W, CHAR_H, hairPal, [
+  bun: sprite('char.hair.bun', CHAR_W, LAYER_H, hairPal, [
     hairRows(`
     ................
     .hh..hhhhh......
@@ -331,7 +340,7 @@ const matPal = { m: '@m1', M: '@m0', l: '@m2' };
 export const helmetLayers: Record<string, { def: SpriteDef; hidesHair: boolean }> = {
   cap: {
     hidesHair: false,
-    def: sprite('char.helm.cap', CHAR_W, CHAR_H, matPal, [
+    def: sprite('char.helm.cap', CHAR_W, LAYER_H, matPal, [
       hairRows(`
       ................
       .....mmmmm......
@@ -343,7 +352,7 @@ export const helmetLayers: Record<string, { def: SpriteDef; hidesHair: boolean }
   },
   helm: {
     hidesHair: true,
-    def: sprite('char.helm.helm', CHAR_W, CHAR_H, matPal, [
+    def: sprite('char.helm.helm', CHAR_W, LAYER_H, matPal, [
       hairRows(`
       ................
       .....mmmmm......
@@ -359,7 +368,7 @@ export const helmetLayers: Record<string, { def: SpriteDef; hidesHair: boolean }
   },
   hood: {
     hidesHair: true,
-    def: sprite('char.helm.hood', CHAR_W, CHAR_H, matPal, [
+    def: sprite('char.helm.hood', CHAR_W, LAYER_H, matPal, [
       hairRows(`
       ................
       .....mmmmm......
@@ -378,7 +387,7 @@ export const helmetLayers: Record<string, { def: SpriteDef; hidesHair: boolean }
 };
 
 export const chestLayers: Record<string, SpriteDef> = {
-  vest: sprite('char.chest.vest', CHAR_W, CHAR_H, matPal, [
+  vest: sprite('char.chest.vest', CHAR_W, LAYER_H, matPal, [
     hairRows(`
     ................
     ................
@@ -400,7 +409,7 @@ export const chestLayers: Record<string, SpriteDef> = {
     ....llllllll....
     `),
   ]),
-  plate: sprite('char.chest.plate', CHAR_W, CHAR_H, matPal, [
+  plate: sprite('char.chest.plate', CHAR_W, LAYER_H, matPal, [
     hairRows(`
     ................
     ................
@@ -422,7 +431,7 @@ export const chestLayers: Record<string, SpriteDef> = {
     ....MMMMMMMM....
     `),
   ]),
-  robe: sprite('char.chest.robe', CHAR_W, CHAR_H, matPal, [
+  robe: sprite('char.chest.robe', CHAR_W, LAYER_H, matPal, [
     hairRows(`
     ................
     ................
@@ -578,8 +587,8 @@ export function composeCharacter(a: Appearance, look: EquipLook = {}): RgbaImage
   ];
   for (const step of plan) {
     const img = createImage(CHAR_W, CHAR_H);
-    const by = step.bob;
-    blitSprite(img, legsLayer, step.leg, 0, 0, slots);
+    const by = step.bob + CHAR_PAD_TOP;
+    blitSprite(img, legsLayer, step.leg, 0, CHAR_PAD_TOP, slots);
     blitSprite(img, a.gender === 'f' ? torsoF : torsoM, 0, 0, by, slots);
     if (chest) blitSprite(img, chest, 0, 0, by, chestSlots);
     blitSprite(img, headLayer, 0, 0, by, slots);

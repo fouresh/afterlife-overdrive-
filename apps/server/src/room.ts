@@ -136,7 +136,11 @@ export class RoomDO extends DurableObject<Env> {
     if (create) {
       if (this.core && !this.core.isClosed) return { error: 'exists' };
       this.core = new RoomCore(code, this.transport, this.hooks, now);
-      return this.core.admit(accountId, char, now, isPublic);
+      const r = this.core.admit(accountId, char, now, isPublic);
+      // The creator has not opened the WebSocket yet: if they never do (app closed, network
+      // gone), housekeeping must still free the seat and take the room off the public list.
+      this.scheduleAlarm();
+      return r;
     }
     if (!this.core || this.core.isClosed) return { error: 'not_found' };
     const r = this.core.admit(accountId, char, now);

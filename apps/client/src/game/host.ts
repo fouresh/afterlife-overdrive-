@@ -473,7 +473,9 @@ export class GameHost {
     } else if (this.paused && this.commands.length) {
       this.applyCommands();
     }
-    const alpha = this.paused || dt === 0 ? 1 : Math.min(1, this.acc / TICK_DT);
+    // During hit-stop dt is 0 but `acc` is untouched: keep the same sub-tick alpha so the frozen
+    // frame does not jump forward (alpha 1) and back again when the stop ends.
+    const alpha = this.paused ? 1 : Math.min(1, this.acc / TICK_DT);
     const px = w.e.px[p.ent]! + (w.e.x[p.ent]! - w.e.px[p.ent]!) * alpha;
     const py = w.e.py[p.ent]! + (w.e.y[p.ent]! - w.e.py[p.ent]!) * alpha;
     this.renderer.updateCamera(
