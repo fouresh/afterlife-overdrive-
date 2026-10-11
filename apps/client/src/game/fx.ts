@@ -1,5 +1,6 @@
 import { Container, Sprite, type Texture } from 'pixi.js';
 import type { Atlas } from './atlas';
+import { snap } from './renderer';
 
 /**
  * Pooled visual effects: particles, damage numbers, slashes, rings, flashes.
@@ -135,7 +136,8 @@ export class Fx {
       p.shrink = false;
       p.s.tint = color;
       p.s.texture = this.pxTex;
-      p.s.scale.set(opts.size ?? (Math.random() < 0.3 ? 1.5 : 1));
+      // Finer sparks at HD density: 1.6–2.4 world px instead of 2–3.
+      p.s.scale.set(opts.size ?? (Math.random() < 0.3 ? 1.2 : 0.8));
       p.s.alpha = 1;
       p.s.visible = true;
     }
@@ -240,7 +242,7 @@ export class Fx {
         p.vx *= 0.6;
         p.vy *= 0.6;
       }
-      p.s.position.set(Math.round(p.x), Math.round(p.y - p.z));
+      p.s.position.set(snap(p.x), snap(p.y - p.z));
       const k = p.life / p.max;
       if (p.fade) p.s.alpha = Math.min(1, k * 2);
       if (p.shrink) p.s.scale.set(Math.max(0.5, k * 1.5));
@@ -253,7 +255,7 @@ export class Fx {
       const alpha = Math.min(1, n.life * 4);
       for (const s of n.digits) {
         if (!s.visible) continue;
-        s.y = Math.round(n.y);
+        s.y = snap(n.y);
         s.alpha = alpha;
         if (n.life <= 0) s.visible = false;
       }

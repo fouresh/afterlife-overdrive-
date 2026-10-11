@@ -107,11 +107,7 @@ export function TouchControls({ host, hubMode }: { host: GameHost; hubMode?: boo
           <div class="joy-knob" ref={knob} />
         </div>
       </div>
-      {hud.interact && (
-        <div class="interact-label" style={{ color: hud.interact.color }}>
-          {hud.interact.label}
-        </div>
-      )}
+      <WorldPrompt host={host} />
       <div class={`cbtns${hubMode ? ' cbtns--hub' : ''}`}>
         {hubMode ? (
           <ActionButton
@@ -200,28 +196,39 @@ export function DesktopBar({ host, hubMode }: { host: GameHost; hubMode?: boolea
     </div>
   );
   return (
-    <div class="dbar">
-      {hud.interact && (
-        <div class="dbar__prompt" style={{ color: hud.interact.color }}>
-          F — {hud.interact.label}
-        </div>
-      )}
-      {!hubMode && (
-        <div class="dbar__row">
-          {slot(0, 'Q')}
-          {slot(1, 'E')}
-          <div class="dbar__slot">
-            <PixelIcon name="potion" />
-            <kbd>R ×{hud.potions}</kbd>
+    <>
+      <WorldPrompt host={host} prefix="F — " />
+      <div class="dbar">
+        {!hubMode && (
+          <div class="dbar__row">
+            {slot(0, 'Q')}
+            {slot(1, 'E')}
+            <div class="dbar__slot">
+              <PixelIcon name="potion" />
+              <kbd>R ×{hud.potions}</kbd>
+            </div>
+            <span class="dbar__hint">
+              WASD · мышь · ЛКМ атака · Пробел рывок · I сумка · Esc пауза
+            </span>
           </div>
-          <span class="dbar__hint">
-            WASD · мышь · ЛКМ атака · Пробел рывок · I сумка · Esc пауза
-          </span>
-        </div>
-      )}
-      {hubMode && <span class="dbar__hint">WASD — ходить · F — говорить · Esc — меню</span>}
-    </div>
+        )}
+        {hubMode && <span class="dbar__hint">WASD — ходить · F — говорить · Esc — меню</span>}
+      </div>
+    </>
   );
+}
+
+/**
+ * Interaction label ("Открыть сундук", "Говорить: Мира") floating over the object itself.
+ * The host fills and positions the element every frame.
+ */
+function WorldPrompt({ host, prefix = '' }: { host: GameHost; prefix?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    host.setPromptElement(ref.current, prefix);
+    return () => host.setPromptElement(null);
+  }, [host, prefix]);
+  return <div class="wprompt" ref={ref} data-testid="interact-prompt" hidden />;
 }
 
 function ActionButton(props: {

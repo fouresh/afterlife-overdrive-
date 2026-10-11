@@ -26,7 +26,7 @@ export function AlchemistPanel({ ctx, onClose }: { ctx: PanelCtx; onClose: () =>
         </button>
       )}
       <div class="shoprow">
-        <img src={ctx.atlas.dataUrl('prop.potion', 0, 3)} alt="" />
+        <img src={ctx.atlas.dataUrl('prop.potion', 0, 4)} alt="" />
         <div class="shoprow__text">
           <div class="shoprow__name">Зелье лечения</div>
           <div class="shoprow__desc">

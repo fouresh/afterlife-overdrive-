@@ -1,10 +1,10 @@
-import { TILESETS, pickWeighted, type TilesetDef } from '@ao/content';
+import { ART_RES, TILESETS, pickWeighted, type TilesetDef } from '@ao/content';
 import { Tile, type DungeonFloor } from '@ao/procgen';
 import { TILE } from '@ao/shared';
 import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
 import type { Atlas } from './atlas';
 
-const CHUNK = 16; // tiles per chunk side → 256×256 px textures
+const CHUNK = 16; // tiles per chunk side → 256×256 world px (512×512 texels at ART_RES 2)
 
 function isWallLike(t: number): boolean {
   return t === Tile.Wall || t === Tile.Void;
@@ -55,10 +55,13 @@ export class TilemapView {
     for (let cy = 0; cy < ch; cy++) {
       for (let cx = 0; cx < cw; cx++) {
         const canvas = document.createElement('canvas');
-        canvas.width = CHUNK * TILE;
-        canvas.height = CHUNK * TILE;
+        canvas.width = CHUNK * TILE * ART_RES;
+        canvas.height = CHUNK * TILE * ART_RES;
         const c = canvas.getContext('2d')!;
         c.imageSmoothingEnabled = false;
+        // Draw in world pixels; texels land 1:1 on the chunk canvas.
+        c.scale(ART_RES, ART_RES);
+        const hair = 1 / ART_RES; // one texel
         let any = false;
         for (let ty = 0; ty < CHUNK; ty++) {
           for (let tx = 0; tx < CHUNK; tx++) {
@@ -76,10 +79,22 @@ export class TilemapView {
               if (t === Tile.Pit) {
                 c.fillStyle = ts.pit;
                 c.fillRect(dx, dy, TILE, TILE);
+                // Depth: a lit lip on top, the far wall falling into darkness below it,
+                // thin edges on the sides.
                 if (!isPitLike(tileAt(x, y - 1))) {
                   c.fillStyle = ts.pitEdge;
-                  c.fillRect(dx, dy, TILE, 2);
+                  c.fillRect(dx, dy, TILE, hair * 2);
+                  c.globalAlpha = 0.45;
+                  c.fillRect(dx, dy + hair * 2, TILE, hair * 3);
+                  c.globalAlpha = 0.2;
+                  c.fillRect(dx, dy + hair * 5, TILE, hair * 4);
+                  c.globalAlpha = 1;
                 }
+                c.globalAlpha = 0.5;
+                c.fillStyle = ts.pitEdge;
+                if (!isPitLike(tileAt(x - 1, y))) c.fillRect(dx, dy, hair, TILE);
+                if (!isPitLike(tileAt(x + 1, y))) c.fillRect(dx + TILE - hair, dy, hair, TILE);
+                c.globalAlpha = 1;
                 // A few glints (water in the forest, dust in the crypt).
                 c.fillStyle = ts.pitEdge;
                 c.globalAlpha = 0.35;
@@ -115,18 +130,27 @@ export class TilemapView {
                   dx,
                   dy,
                 );
-                // Rim where the wall top meets walkable space.
+                // Rim where the wall top meets walkable space (one texel, plus a soft inner one).
                 c.fillStyle = ts.rim;
-                if (!solidAt(x - 1, y)) c.fillRect(dx, dy, 1, TILE);
-                if (!solidAt(x + 1, y)) c.fillRect(dx + TILE - 1, dy, 1, TILE);
-                if (!solidAt(x, y - 1)) c.fillRect(dx, dy, TILE, 1);
+                if (!solidAt(x - 1, y)) c.fillRect(dx, dy, hair, TILE);
+                if (!solidAt(x + 1, y)) c.fillRect(dx + TILE - hair, dy, hair, TILE);
+                if (!solidAt(x, y - 1)) c.fillRect(dx, dy, TILE, hair);
+                c.globalAlpha = 0.35;
+                if (!solidAt(x - 1, y)) c.fillRect(dx + hair, dy, hair, TILE);
+                if (!solidAt(x + 1, y)) c.fillRect(dx + TILE - 2 * hair, dy, hair, TILE);
+                if (!solidAt(x, y - 1)) c.fillRect(dx, dy + hair, TILE, hair);
+                c.globalAlpha = 1;
                 any = true;
               }
             }
           }
         }
         if (!any) continue;
-        const source = new CanvasSource({ resource: canvas, scaleMode: 'nearest' });
+        const source = new CanvasSource({
+          resource: canvas,
+          scaleMode: 'nearest',
+          resolution: ART_RES,
+        });
         const sprite = new Sprite(new Texture({ source }));
         sprite.x = cx * CHUNK * TILE;
         sprite.y = cy * CHUNK * TILE;

@@ -27,8 +27,15 @@ export interface Layout {
   doors: LayoutDoor[];
 }
 
-const MIN_LEAF_W = 17;
-const MIN_LEAF_H = 15;
+// Leaves (and so rooms) are sized for a ~17×37-tile landscape view: a room should give room to
+// dodge, not fit on one screen with space to spare.
+const MIN_LEAF_W = 22;
+const MIN_LEAF_H = 18;
+const MIN_ROOM_W = 12;
+const MIN_ROOM_H = 10;
+/** Unsplit big leaves would otherwise make empty barns several screens wide. */
+const MAX_ROOM_W = 26;
+const MAX_ROOM_H = 20;
 const MARGIN = 3;
 
 function splitLeaves(rng: Rng, w: number, h: number, target: number): Rect[] {
@@ -86,7 +93,7 @@ function adjacency(a: Rect, b: Rect): 'h' | 'v' | null {
 }
 
 export function bspLayout(rng: Rng, roomTarget: number): Layout | null {
-  const area = roomTarget * 330;
+  const area = roomTarget * 520;
   const w = Math.round(Math.sqrt(area * 1.35));
   const h = Math.round(area / w);
   const leaves = splitLeaves(rng, w, h, roomTarget);
@@ -94,10 +101,10 @@ export function bspLayout(rng: Rng, roomTarget: number): Layout | null {
 
   const tiles = new Uint8Array(w * h).fill(Tile.Wall);
   const rooms: LayoutRoom[] = leaves.map((leaf) => {
-    const maxW = leaf.w - MARGIN * 2;
-    const maxH = leaf.h - MARGIN * 2;
-    const rw = Math.max(8, maxW - rng.int(0, Math.min(4, maxW - 8)));
-    const rh = Math.max(7, maxH - rng.int(0, Math.min(4, maxH - 7)));
+    const maxW = Math.min(MAX_ROOM_W, leaf.w - MARGIN * 2);
+    const maxH = Math.min(MAX_ROOM_H, leaf.h - MARGIN * 2);
+    const rw = Math.max(MIN_ROOM_W, maxW - rng.int(0, Math.min(4, maxW - MIN_ROOM_W)));
+    const rh = Math.max(MIN_ROOM_H, maxH - rng.int(0, Math.min(4, maxH - MIN_ROOM_H)));
     const rx = leaf.x + MARGIN + rng.int(0, maxW - rw);
     const ry = leaf.y + MARGIN + rng.int(0, maxH - rh);
     return { leaf, rect: { x: rx, y: ry, w: rw, h: rh } };

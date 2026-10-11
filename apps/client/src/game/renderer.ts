@@ -1,10 +1,19 @@
+import { ART_RES } from '@ao/content';
 import { Application, Container, Sprite, TextureSource } from 'pixi.js';
 import { applyCanvasSize, type Viewport } from '../core/viewport';
 import type { Atlas, AtlasEntry } from './atlas';
 
 TextureSource.defaultOptions.scaleMode = 'nearest';
 
-/** Pixi application wrapper: owns the canvas, the layer stack and the camera. */
+/** Snap a world coordinate to the texel grid (1 / ART_RES world px). */
+export function snap(v: number): number {
+  return Math.round(v * ART_RES) / ART_RES;
+}
+
+/**
+ * Pixi application wrapper: owns the canvas, the layer stack and the camera. The stage works in
+ * world pixels; the renderer resolution is ART_RES, so one canvas pixel is one sprite texel.
+ */
 export class Renderer {
   readonly app = new Application();
   readonly world = new Container();
@@ -28,7 +37,7 @@ export class Renderer {
       canvas,
       width: viewport.logicalW,
       height: viewport.logicalH,
-      resolution: 1,
+      resolution: ART_RES,
       autoDensity: false,
       antialias: false,
       background,
@@ -108,10 +117,8 @@ export class Renderer {
     }
 
     // Clamp the camera center so the map edge never reveals empty space.
-    const cx =
-      mapW <= v.logicalW ? mapW / 2 : Math.min(Math.max(this.camX, halfW), mapW - halfW);
-    const cy =
-      mapH <= v.logicalH ? mapH / 2 : Math.min(Math.max(this.camY, halfH), mapH - halfH);
+    const cx = mapW <= v.logicalW ? mapW / 2 : Math.min(Math.max(this.camX, halfW), mapW - halfW);
+    const cy = mapH <= v.logicalH ? mapH / 2 : Math.min(Math.max(this.camY, halfH), mapH - halfH);
 
     // Smooth, decaying shake avoids the harsh random-pixel buzz of per-frame randomness.
     if (this.shake > 0) {
@@ -124,8 +131,9 @@ export class Renderer {
       this.shakeY = 0;
       this.shakeTime = 0;
     }
-    this.world.x = Math.round(halfW - cx + this.shakeX);
-    this.world.y = Math.round(halfH - cy + this.shakeY);
+    // Snap to texels (not whole world pixels): half-pixel camera steps make scrolling smoother.
+    this.world.x = snap(halfW - cx + this.shakeX);
+    this.world.y = snap(halfH - cy + this.shakeY);
   }
 
   addShake(amount: number): void {

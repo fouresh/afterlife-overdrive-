@@ -78,3 +78,10 @@ export function shade(hex: string, factor: number): string {
   const f = (c: number) => Math.max(0, Math.min(255, Math.round(c * factor)));
   return rgbToHex(f(r), f(g), f(b));
 }
+
+/** Mix a hex color towards white by `t` (0 = unchanged, 1 = white). */
+export function tint(hex: string, t: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const f = (c: number) => Math.round(c + (255 - c) * t);
+  return rgbToHex(f(r), f(g), f(b));
+}

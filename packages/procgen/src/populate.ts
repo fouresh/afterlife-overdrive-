@@ -217,7 +217,7 @@ export function populate(
       case 'combat':
       case 'key': {
         const waves = depth === 0 ? rng.int(1, 2) : depth === 1 ? 2 : rng.int(2, 3);
-        const count = Math.max(3, Math.min(8, Math.round((r.w * r.h) / 30) + depth));
+        const count = Math.max(3, Math.min(8, Math.round((r.w * r.h) / 45) + depth));
         for (let wv = 0; wv < waves; wv++) {
           for (let k = 0; k < count - (wv === 0 ? 0 : 1); k++)
             addSpawn(pickEnemy(), wv, stamp.spawnHints);

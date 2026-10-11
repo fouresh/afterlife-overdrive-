@@ -7,8 +7,6 @@ import { writeFileSync } from 'node:fs';
 import {
   C,
   CHAR_FRAME_COUNT,
-  CHAR_H,
-  CHAR_W,
   DEFAULT_APPEARANCE,
   HAIR_STYLES,
   allSprites,
@@ -21,13 +19,14 @@ import {
 import { encodePng, upscale } from '../apps/client/build/png';
 
 const out = process.argv[2] ?? 'sprite-sheet.png';
-const SCALE = 4;
-const W = 512;
+// Frames are HD (ART_RES texels per world px): ×2 keeps the sheet readable at a glance.
+const SCALE = 2;
+const W = 1024;
 const items: { w: number; h: number; img: ReturnType<typeof createImage> }[] = [];
 
+const push = (img: ReturnType<typeof createImage>) => items.push({ w: img.w, h: img.h, img });
 for (const def of allSprites()) {
-  for (let f = 0; f < def.frames.length; f++)
-    items.push({ w: def.w, h: def.h, img: rasterize(def, f) });
+  for (let f = 0; f < def.frames.length; f++) push(rasterize(def, f));
 }
 HAIR_STYLES.forEach((hairStyle, i) => {
   const frames = composeCharacter({
@@ -38,7 +37,7 @@ HAIR_STYLES.forEach((hairStyle, i) => {
     clothColor: i,
     skin: i % 6,
   });
-  for (let f = 0; f < CHAR_FRAME_COUNT; f++) items.push({ w: CHAR_W, h: CHAR_H, img: frames[f]! });
+  for (let f = 0; f < CHAR_FRAME_COUNT; f++) push(frames[f]!);
 });
 const armored = composeCharacter(DEFAULT_APPEARANCE, {
   helmet: { shape: 'helm', material: 'iron' },
@@ -49,7 +48,7 @@ const mage = composeCharacter(
   { ...DEFAULT_APPEARANCE, gender: 'f', hairStyle: 'long' },
   { helmet: { shape: 'hood', material: 'arcane' }, chest: { shape: 'robe', material: 'arcane' } },
 );
-for (const f of [...armored, ...mage]) items.push({ w: CHAR_W, h: CHAR_H, img: f });
+for (const f of [...armored, ...mage]) push(f);
 
 // shelf pack
 let x = 2;
