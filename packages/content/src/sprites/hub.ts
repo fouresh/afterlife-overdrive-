@@ -218,4 +218,34 @@ export const grave = outlined(
   ],
 );
 
-export const HUB_SPRITES = [anvil, cauldron, stall, board, statue, grave];
+/** Cage for story captives (drawn over the NPC). Frame 0 = locked, 1 = broken open. */
+function cageFrame(open: boolean): string {
+  const rows: string[] = [];
+  for (let y = 0; y < 24; y++) {
+    let row = '';
+    for (let x = 0; x < 16; x++) {
+      let c = '.';
+      const bar = x === 1 || x === 4 || x === 11 || x === 14 || (!open && (x === 7 || x === 8));
+      if (y === 2 || y === 4) c = x >= 1 && x <= 14 ? 'k' : '.';
+      else if (y === 3) c = x === 1 || x === 14 ? 'k' : x >= 2 && x <= 13 ? 'S' : '.';
+      else if (y >= 5 && y <= 21 && bar) c = open && y > 12 && (x === 4 || x === 11) ? '.' : 's';
+      else if (y === 22) c = x >= 1 && x <= 14 ? 'w' : '.';
+      else if (y === 23) c = x >= 1 && x <= 14 ? 'd' : '.';
+      if (!open && y === 12 && x >= 6 && x <= 9) c = x === 6 || x === 9 ? 'g' : 'G';
+      row += c;
+    }
+    rows.push(row);
+  }
+  return rows.join('\n');
+}
+
+export const cage = outlined(
+  'prop.cage',
+  16,
+  24,
+  { k: C.ink, s: C.stone3, S: C.stone4, w: C.wood1, d: C.wood0, g: C.gold1, G: C.gold2 },
+  [cageFrame(false), cageFrame(true)],
+  { ox: 8, oy: 22 },
+);
+
+export const HUB_SPRITES = [anvil, cauldron, stall, board, statue, grave, cage];

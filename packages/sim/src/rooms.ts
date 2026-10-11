@@ -21,6 +21,14 @@ export function initFloorEntities(w: World): void {
       case 'station':
         spawnProp(w, PropKind.Station, p.x, p.y, p.v ?? 0, p.room);
         break;
+      case 'captive': {
+        // Only while someone in the run is looking for this NPC (already rescued → no cage).
+        const npc = w.content.npcs[p.v ?? -1];
+        const goal = `rescue:${npc?.id ?? ''}`;
+        if (npc && w.players.some((q) => q.questGoals.includes(goal)))
+          spawnProp(w, PropKind.Captive, p.x, p.y, p.v ?? 0, p.room);
+        break;
+      }
       case 'spikes':
         spawnProp(w, PropKind.Spikes, p.x, p.y, (p.x * 7 + p.y * 3) % 24, p.room);
         break;

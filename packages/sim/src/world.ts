@@ -79,6 +79,10 @@ export interface SimPlayer {
   revive: number;
   /** Sum of active buff move speed (kept separately so the client can predict movement). */
   buffSpeed: number;
+  /** Story events earned this run ('rescue:borgan', 'boss:cryptWarden', 'clear:forest'). */
+  story: string[];
+  /** Goals of the hero's active story quests (captives appear only if someone needs them). */
+  questGoals: string[];
   /** Loot rng stream for this player. */
   lootRng: Rng;
 }

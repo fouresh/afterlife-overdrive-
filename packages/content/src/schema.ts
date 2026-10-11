@@ -331,6 +331,8 @@ export const RoomTemplate = z.object({
    */
   rows: z.array(z.string()).min(1),
   weight: z.number().positive().default(1),
+  /** Only in these biomes (undefined = every biome). */
+  biomes: z.array(z.string()).optional(),
 });
 export type RoomTemplate = z.infer<typeof RoomTemplate>;
 
@@ -354,5 +356,69 @@ export const BiomeDef = z.object({
   torchSpacing: z.number().int().min(0),
   spikeChance: z.number().min(0).max(1),
   roomCount: z.tuple([z.number().int().positive(), z.number().int().positive()]),
+  /** Floors in a run of this biome (the last one has the boss). */
+  floors: z.number().int().min(1).max(6).default(3),
+  /** Story flag that unlocks the biome in the portal (undefined = always open). */
+  requires: z.string().optional(),
+  /** Story NPCs held captive on a floor (appear while someone in the run looks for them). */
+  captives: z.array(z.object({ npc: z.string(), depth: z.number().int().min(0) })).default([]),
+  /** Floor tiles that get a glowing light prop (forest mushrooms), per tile chance. */
+  lights: z.number().min(0).max(1).default(0),
 });
 export type BiomeDef = z.infer<typeof BiomeDef>;
+
+export const QuestDef = z.object({
+  id: z.string(),
+  chapter: z.number().int().min(1),
+  /** Main story quest (shown in the HUD journal line) or a side quest. */
+  main: z.boolean().default(false),
+  titleKey: z.string(),
+  descKey: z.string(),
+  /** Story event that completes the quest (e.g. 'clear:forest', 'rescue:borgan'). */
+  goal: z.string(),
+  reward: z
+    .object({
+      xp: z.number().int().min(0).default(0),
+      gold: z.number().int().min(0).default(0),
+      flags: z.array(z.string()).default([]),
+    })
+    .default({ xp: 0, gold: 0, flags: [] }),
+  /** Quests started when this one completes. */
+  next: z.array(z.string()).default([]),
+  /** Cutscene shown after the run that completed the quest. */
+  cutscene: z.string().optional(),
+});
+export type QuestDef = z.infer<typeof QuestDef>;
+
+export const Speaker = z.enum(['mira', 'borgan', 'trader', 'hero', 'core', 'narrator']);
+export type Speaker = z.infer<typeof Speaker>;
+
+export const DialogDef = z.object({
+  id: z.string(),
+  /** [speaker, text key] */
+  lines: z.array(z.tuple([Speaker, z.string()])).min(1),
+});
+export type DialogDef = z.infer<typeof DialogDef>;
+
+/**
+ * When a dialog plays: talking to an NPC (or entering the hub, npc = 'hub') with the character's
+ * story state matching `when`. The first matching rule wins; then its effects apply.
+ */
+export const StoryRule = z.object({
+  npc: z.string(),
+  when: z
+    .object({
+      flags: z.array(z.string()).default([]),
+      notFlags: z.array(z.string()).default([]),
+      questDone: z.array(z.string()).default([]),
+    })
+    .default({ flags: [], notFlags: [], questDone: [] }),
+  dialog: z.string(),
+  effects: z
+    .object({
+      flags: z.array(z.string()).default([]),
+      startQuests: z.array(z.string()).default([]),
+    })
+    .default({ flags: [], startQuests: [] }),
+});
+export type StoryRule = z.infer<typeof StoryRule>;

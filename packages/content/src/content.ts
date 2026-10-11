@@ -4,7 +4,9 @@ import { AFFIXES } from './data/affixes';
 import { BIOMES } from './data/biomes';
 import { ENEMIES } from './data/enemies';
 import { PROJECTILES } from './data/projectiles';
+import { NPC_LIST, NPCS, type NpcDef } from './data/npcs';
 import { ROOM_TEMPLATES } from './data/rooms';
+import { DIALOGS, QUESTS, STORY_RULES } from './data/story';
 import { WEAPONS } from './data/weapons';
 import {
   AffixDef,
@@ -12,9 +14,12 @@ import {
   ArmorBase,
   ArtifactBase,
   BiomeDef,
+  DialogDef,
   EnemyDef,
   ProjectileDef,
+  QuestDef,
   RoomTemplate,
+  StoryRule,
   WeaponBase,
   type Slot,
 } from './schema';
@@ -41,6 +46,11 @@ export interface Content {
   rooms: RoomTemplate[];
   bases: Map<string, ItemBase>;
   basesBySlot: Map<Slot, ItemBase[]>;
+  quests: QuestDef[];
+  questById: Map<string, QuestDef>;
+  dialogs: Map<string, DialogDef>;
+  storyRules: StoryRule[];
+  npcs: NpcDef[];
 }
 
 let cached: Content | undefined;
@@ -75,6 +85,9 @@ export function getContent(): Content {
   const allies = parseAll<AllyDef>('ally', AllyDef, ALLIES);
   const biomeList = parseAll<BiomeDef>('biome', BiomeDef, BIOMES);
   const rooms = parseAll<RoomTemplate>('room', RoomTemplate, ROOM_TEMPLATES);
+  const quests = parseAll<QuestDef>('quest', QuestDef, QUESTS);
+  const dialogList = parseAll<DialogDef>('dialog', DialogDef, DIALOGS);
+  const storyRules = parseAll<StoryRule>('storyRule', StoryRule, STORY_RULES);
 
   const index = <T extends { id: string }>(name: string, list: T[]) => {
     const m = new Map<string, number>();
@@ -131,6 +144,26 @@ export function getContent(): Content {
     for (const e of [...b.enemies.map((x) => x.id), ...b.minibosses, ...b.bosses]) {
       if (!enemyIndex.has(e)) errors.push(`biome ${b.id}: unknown enemy '${e}'`);
     }
+    for (const c of b.captives)
+      if (!NPCS[c.npc]) errors.push(`biome ${b.id}: unknown captive '${c.npc}'`);
+  }
+
+  // Story graph: every reference resolves.
+  index('quest', quests);
+  index('dialog', dialogList);
+  const questById = new Map(quests.map((q) => [q.id, q]));
+  const dialogs = new Map(dialogList.map((d) => [d.id, d]));
+  for (const q of quests) {
+    for (const n of q.next)
+      if (!questById.has(n)) errors.push(`quest ${q.id}: unknown next '${n}'`);
+    if (q.cutscene && !dialogs.has(q.cutscene))
+      errors.push(`quest ${q.id}: unknown cutscene '${q.cutscene}'`);
+  }
+  for (const r of storyRules) {
+    if (!dialogs.has(r.dialog)) errors.push(`story rule ${r.npc}: unknown dialog '${r.dialog}'`);
+    for (const q of [...r.effects.startQuests, ...r.when.questDone])
+      if (!questById.has(q)) errors.push(`story rule ${r.npc}: unknown quest '${q}'`);
+    if (r.npc !== 'hub' && !NPCS[r.npc]) errors.push(`story rule: unknown npc '${r.npc}'`);
   }
 
   const bases = new Map<string, ItemBase>();
@@ -164,6 +197,11 @@ export function getContent(): Content {
     rooms,
     bases,
     basesBySlot,
+    quests,
+    questById,
+    dialogs,
+    storyRules,
+    npcs: NPC_LIST,
   };
   return cached;
 }

@@ -1,6 +1,6 @@
 /**
  * Render a generated floor to PNG (4 px per tile) for visual review without a browser:
- *   pnpm floor-map <seed> [depth] [out.png]
+ *   pnpm floor-map <seed> [depth] [out.png] [biome]
  * Colors: floor grey, wall dark, door orange, locked door gold, pit black, spawns red,
  * chest yellow, stairs cyan, shop green, start white; room type tint on the floor.
  */
@@ -11,7 +11,8 @@ import { encodePng, upscale } from '../apps/client/build/png';
 const seed = Number(process.argv[2] ?? 1);
 const depth = Number(process.argv[3] ?? 0);
 const out = process.argv[4] ?? `floor-${seed}-${depth}.png`;
-const f = generateFloor({ seed, biome: 'crypt', depth, floors: 3 });
+const biome = process.argv[5] ?? 'crypt';
+const f = generateFloor({ seed, biome, depth, floors: biome === 'forest' ? 2 : 3 });
 const img = new Uint8Array(f.w * f.h * 4);
 const put = (x: number, y: number, c: [number, number, number]) =>
   img.set([...c, 255], (y * f.w + x) * 4);

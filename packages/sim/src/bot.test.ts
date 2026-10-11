@@ -110,6 +110,31 @@ describe('sim gameplay', () => {
     expect(portal()).toBe(true);
   });
 
+  it('forest: bots clear floor 1 and kill the Pack Leader on floor 2', () => {
+    for (const depth of [0, 1]) {
+      botFlow = undefined;
+      const loadout = emptyLoadout();
+      loadout.weapon = starterItem('sword.knight');
+      const w = createFloorWorld({ seed: 777 + depth, biome: 'forest', floors: 2 }, depth, [
+        { loadout, quests: ['rescue:trader'] },
+      ]);
+      w.e.hp[w.players[0]!.ent] = 1e6;
+      w.e.maxHp[w.players[0]!.ent] = 1e6;
+      const done = () =>
+        depth === 0
+          ? w.stairsOpen
+          : (() => {
+              for (let i = 0; i < w.e.hi; i++)
+                if (w.e.alive[i] && w.e.kind[i] === Kind.Prop && w.e.def[i] === 4) return true;
+              return false;
+            })();
+      let t = 0;
+      for (; t < 30 * 60 * 8 && !done(); t++) step(w, [botInput(w, t)]);
+      expect(done()).toBe(true);
+      if (depth === 1) expect(w.players[0]!.story).toContain('boss:alphaWolf');
+    }
+  });
+
   it('random input soak: no NaN, no crash, entity count bounded', () => {
     for (const seed of [1, 2, 3]) {
       botFlow = undefined;

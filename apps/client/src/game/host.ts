@@ -31,6 +31,7 @@ import {
   rollItem,
   spawnPickup,
   step,
+  storyEvent,
   type ItemInstance,
   type Loadout,
   type Outcome,
@@ -302,6 +303,7 @@ export class GameHost {
       this.world,
       (i) => this.playerSheet(i),
       (station) => this.npcSheet(station),
+      (npc) => this.npcSheetByIndex(npc),
       this.stations,
       {
         hitStop: (s) => {
@@ -360,6 +362,19 @@ export class GameHost {
     return s.entry;
   }
 
+  private npcByIndex = new Map<number, Sheet>();
+  /** Paper-doll of a story NPC by index (captives in dungeons). */
+  private npcSheetByIndex(index: number): AtlasEntry | null {
+    const npc = getContent().npcs[index];
+    if (!npc) return null;
+    let s = this.npcByIndex.get(index);
+    if (!s) {
+      s = new Sheet(composeCharacter(npc.appearance, npc.look), CHAR_W, CHAR_H, CHAR_OX, CHAR_OY);
+      this.npcByIndex.set(index, s);
+    }
+    return s.entry;
+  }
+
   /** Rebuild the local player's paper-doll (appearance or equipment changed outside the sim). */
   refreshLook(): void {
     const p = this.world.players[this.localIndex];
@@ -410,7 +425,8 @@ export class GameHost {
   private frame = (now: number): void => {
     if (!this.running) return;
     this.raf = requestAnimationFrame(this.frame);
-    const dtMs = Math.min(250, now - this.last);
+    // rAF timestamps can be slightly older than the start time: never step backwards.
+    const dtMs = Math.max(0, Math.min(250, now - this.last));
     this.last = now;
     let dt = dtMs / 1000;
     this.frames++;
@@ -600,7 +616,11 @@ export class GameHost {
         if (k === PropKind.Chest) h.interact = { label: 'Открыть сундук', color: '#f2c94c' };
         else if (k === PropKind.Stairs) h.interact = { label: 'Спуститься', color: '#36c4b4' };
         else if (k === PropKind.Portal) h.interact = { label: 'Войти в портал', color: '#36c4b4' };
-        else if (k === PropKind.Station) {
+        else if (k === PropKind.Captive) {
+          const npc = getContent().npcs[e.ref[j]!];
+          const name = npc ? (contentRu[npc.nameKey] ?? npc.id) : '';
+          h.interact = { label: `Освободить: ${name}`, color: '#f2c94c' };
+        } else if (k === PropKind.Station) {
           const st = this.stations[e.ref[j]!];
           if (st) {
             const who = st.npc ? contentRu[st.npc.nameKey] : contentRu[st.nameKey];
@@ -709,9 +729,26 @@ export class GameHost {
     p.gold += 120;
   }
 
-  /** e2e/debug helper: finish the floor as if the stairs were used. */
+  /** e2e/debug helper: finish the floor as if the stairs (or the exit portal) were used. */
   e2eFinishFloor(): void {
-    this.world.outcome = this.world.floor.isLast ? 'victory' : 'exit';
+    const w = this.world;
+    if (w.floor.isLast) storyEvent(w, `clear:${w.floor.biome}`);
+    w.outcome = w.floor.isLast ? 'victory' : 'exit';
+  }
+
+  /** e2e/debug helper: free the captive of this floor (if one is here). Returns its NPC id. */
+  e2eRescue(): string | null {
+    const w = this.world;
+    const e = w.e;
+    for (let i = 0; i < e.hi; i++) {
+      if (!e.alive[i] || e.kind[i] !== Kind.Prop || e.def[i] !== PropKind.Captive) continue;
+      const npc = getContent().npcs[e.ref[i]!];
+      if (!npc) return null;
+      e.state[i] = 1;
+      storyEvent(w, `rescue:${npc.id}`);
+      return npc.id;
+    }
+    return null;
   }
 
   /** Enemy id that last damaged the local player (hardcore memorial). */
@@ -739,6 +776,7 @@ export class GameHost {
     this.tilemap?.destroy();
     for (const s of this.sheets) s?.destroy();
     for (const s of this.npcSheets.values()) s.destroy();
+    for (const s of this.npcByIndex.values()) s.destroy();
     this.renderer.destroy();
   }
 }

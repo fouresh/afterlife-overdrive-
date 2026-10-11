@@ -51,5 +51,8 @@ export function carryOut(w: World): PlayerSetup[] {
     progress: p.progress,
     killsBy: p.killsBy,
     chests: p.chests,
+    hardcore: p.hardcore,
+    story: [...p.story],
+    quests: [...p.questGoals],
   }));
 }

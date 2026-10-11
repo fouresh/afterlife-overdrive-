@@ -1,6 +1,7 @@
 import { getContent } from '@ao/content';
 import { Rng, deriveSeed } from '@ao/shared';
 import { bspLayout, type Layout } from './layout-bsp';
+import { gladesLayout } from './layout-glades';
 import { populate } from './populate';
 import { assignRoles, buildGraph } from './roles';
 import { Tile } from './tiles';
@@ -29,7 +30,8 @@ export function generateFloor(p: FloorParams): DungeonFloor {
   for (let attempt = 0; attempt < 40; attempt++) {
     const rng = new Rng(deriveSeed(p.seed, 'floor', p.depth, attempt));
     const target = rng.int(biome.roomCount[0], biome.roomCount[1]) + Math.min(p.depth, 2);
-    const layout = bspLayout(rng, target);
+    const layout =
+      biome.generator === 'glades' ? gladesLayout(rng, target) : bspLayout(rng, target);
     if (!layout) continue;
     const graph = buildGraph(layout);
     const roles = assignRoles(rng, layout, graph, isLast);

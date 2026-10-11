@@ -80,6 +80,15 @@ export const PROJECTILES: P[] = [
     spin: 360,
   },
   {
+    id: 'e.spore',
+    sprite: 'proj.spore',
+    speed: 85,
+    range: 200,
+    radius: 4,
+    glow: 0xf2c94c,
+    spin: 180,
+  },
+  {
     id: 'e.bone',
     sprite: 'proj.bone',
     speed: 130,

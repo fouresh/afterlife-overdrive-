@@ -1,3 +1,4 @@
+import { getContent } from '@ao/content';
 import { createCharacter, starterItem, type Difficulty, type RunConfig } from '@ao/sim';
 import { useEffect, useState } from 'preact/hooks';
 import { showFatalError } from '../../core/errors';
@@ -25,6 +26,7 @@ declare global {
       finishFloor?: () => void;
       talk?: (station: string) => void;
       dropNet?: () => void;
+      rescue?: () => string | null;
     };
   }
 }
@@ -148,7 +150,12 @@ export default function GameRoot({ onExit }: { onExit: () => void }) {
               setPhase({
                 kind: 'run',
                 charId: phase.charId,
-                cfg: { seed: flags.seed ?? seed, biome, floors: 3, difficulty },
+                cfg: {
+                  seed: flags.seed ?? seed,
+                  biome,
+                  floors: getContent().biomes.get(biome)?.floors ?? 3,
+                  difficulty,
+                },
               });
             });
           }}

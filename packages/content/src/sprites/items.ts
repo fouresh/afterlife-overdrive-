@@ -275,6 +275,7 @@ const orb = (id: string, a: string, b: string, c: string) =>
 export const projMagic = orb('proj.magic', C.cyan1, C.cyan2, C.white);
 export const projFireball = orb('proj.fireball', C.red1, C.red3, C.gold3);
 export const projOrb = orb('proj.orb', C.violet0, C.violet2, C.violet3);
+export const projSpore = orb('proj.spore', C.gold0, C.gold2, C.gold3);
 export const projWisp = sprite(
   'proj.wisp',
   4,
@@ -900,6 +901,7 @@ export const digits = outlined(
 );
 
 export const ITEM_SPRITES = [
+  projSpore,
   wpnSword,
   wpnSwordKnight,
   wpnAxe,

@@ -31,6 +31,8 @@ export const Ev = {
   Talk: 25,
   /** A fallen player was revived (a = revived player, b = reviver). */
   Revive: 26,
+  /** A captive NPC was freed (a = NPC index, b = player). */
+  Rescue: 27,
 } as const;
 export type Ev = (typeof Ev)[keyof typeof Ev];
 

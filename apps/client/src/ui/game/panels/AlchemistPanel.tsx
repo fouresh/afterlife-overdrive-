@@ -1,9 +1,18 @@
-import { contentRu } from '@ao/content';
-import { ELIXIRS, MAX_CARRIED_POTIONS, POTION_PRICE, buyElixir, buyPotion } from '@ao/sim';
+import { QUEST_HINTS, contentRu } from '@ao/content';
+import {
+  ELIXIRS,
+  MAX_CARRIED_POTIONS,
+  POTION_PRICE,
+  buyElixir,
+  buyPotion,
+  currentMainQuest,
+} from '@ao/sim';
 import { Panel, Wallet, act, useCtx, type PanelCtx } from './common';
 
 export function AlchemistPanel({ ctx, onClose }: { ctx: PanelCtx; onClose: () => void }) {
   const { c, realm } = useCtx(ctx);
+  const q = currentMainQuest(c);
+  const hint = q ? QUEST_HINTS[q.id] : undefined;
   return (
     <Panel
       title="Алхимик"
@@ -11,6 +20,11 @@ export function AlchemistPanel({ ctx, onClose }: { ctx: PanelCtx; onClose: () =>
       onClose={onClose}
     >
       <Wallet realm={realm} atlas={ctx.atlas} />
+      {hint && ctx.say && (
+        <button class="btn" data-testid="btn-ask-mira" onClick={() => (onClose(), ctx.say?.(hint))}>
+          Спросить совета
+        </button>
+      )}
       <div class="shoprow">
         <img src={ctx.atlas.dataUrl('prop.potion', 0, 3)} alt="" />
         <div class="shoprow__text">

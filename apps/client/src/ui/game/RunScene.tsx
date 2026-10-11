@@ -1,4 +1,10 @@
-import { contentRu } from '@ao/content';
+import {
+  DEFAULT_APPEARANCE,
+  contentRu,
+  getContent,
+  type Appearance,
+  type EquipLook,
+} from '@ao/content';
 import { applyRunResult, runSetup, type Outcome, type RunConfig, type RunReward } from '@ao/sim';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { sfx } from '../../audio/sfx';
@@ -16,6 +22,7 @@ import { PixelIcon } from '../PixelIcon';
 import { Inventory } from '../screens/Inventory';
 import { FloorChoice, type RunStats } from '../screens/RunEnd';
 import { DesktopBar, TouchControls } from '../TouchControls';
+import { DialogOverlay } from './Dialog';
 import { useToasts } from './useToasts';
 
 type Overlay =
@@ -136,6 +143,7 @@ export function RunScene(props: {
           enterCombat: flags.e2e ? () => h.e2eEnterCombat() : undefined,
           grant: flags.e2e ? () => h.e2eGrant() : undefined,
           finishFloor: flags.e2e ? () => h.e2eFinishFloor() : undefined,
+          rescue: flags.e2e ? () => h.e2eRescue() : undefined,
         };
       })
       .catch((err: unknown) => showFatalError(err instanceof Error ? err : new Error(String(err))));
@@ -234,6 +242,7 @@ export function RunScene(props: {
           stats={overlay.stats}
           reward={overlay.reward}
           hardcore={!!c?.hardcore}
+          hero={{ name: c?.name ?? '', appearance: c?.appearance ?? DEFAULT_APPEARANCE }}
           onDone={props.onDone}
         />
       )}
@@ -259,10 +268,24 @@ export function Summary(props: {
   stats: RunStats;
   reward: RunReward;
   hardcore: boolean;
+  hero: { name: string; appearance: Appearance; look?: EquipLook };
   onDone: () => void;
 }) {
   const s = props.stats;
   const r = props.reward;
+  const content = getContent();
+  const cuts = (r.cutscenes ?? []).map((id) => content.dialogs.get(id)).filter((d) => !!d);
+  // Story cutscenes play first (the boss falls…), then the summary.
+  const [cut, setCut] = useState(cuts.length ? 0 : -1);
+  if (cut >= 0 && cuts[cut]) {
+    return (
+      <DialogOverlay
+        dialog={cuts[cut]}
+        hero={props.hero}
+        onDone={() => setCut(cut + 1 < cuts.length ? cut + 1 : -1)}
+      />
+    );
+  }
   const dead = props.outcome === 'dead' || props.outcome === 'lost';
   const title =
     props.outcome === 'victory'
@@ -296,6 +319,14 @@ export function Summary(props: {
           <span>Опыт: +{r.xp}</span>
           <span>Время: {fmtTime(s.seconds)}</span>
         </div>
+        {(r.quests ?? []).map((id) => {
+          const q = content.questById.get(id);
+          return (
+            <div class="questdone" key={id} data-testid="quest-done">
+              Задание выполнено: {q ? contentRu[q.titleKey] : id}
+            </div>
+          );
+        })}
         {r.levels > 0 && (
           <div class="levelup">
             Новый уровень! +{r.levels * 3} очков характеристик — загляните к статуе.

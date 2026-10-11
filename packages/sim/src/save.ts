@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { CONTRACTS } from './progression';
 import { emptyMarket, emptyMaterials } from './economy';
 import { emptyLoadout, type Loadout } from './stats';
+import { upgradeStory } from './story';
 import type { ItemInstance } from './items';
 
 /**
@@ -233,6 +234,13 @@ export interface ProfileV1 {
  * character "Странник" with the same gear, plus its stash and gold in the standard realm.
  */
 export function migrateSave(data: unknown, now: number): AccountSave {
+  const save = migrateFormat(data, now);
+  // Story arrived in M4: veterans keep the forge, the market and the crypt.
+  for (const c of save.characters) upgradeStory(c);
+  return save;
+}
+
+function migrateFormat(data: unknown, now: number): AccountSave {
   const d = data as { v?: number } | null;
   if (d && d.v === SAVE_SCHEMA_VERSION) return AccountSaveSchema.parse(d);
   if (d && d.v === 1) {

@@ -45,3 +45,49 @@ describe('crypt generation', () => {
     expect(withShop).toBeGreaterThan(400);
   });
 });
+
+describe('forest generation (glades and paths)', () => {
+  it('1000 seeds × 2 floors: valid, boss on the last floor, captive on floor 2', () => {
+    const failures: string[] = [];
+    let captives = 0;
+    let lights = 0;
+    for (let seed = 1; seed <= 1000; seed++) {
+      const depth = seed % 2;
+      try {
+        const f = generateFloor({ seed: seed * 104729, biome: 'forest', depth, floors: 2 });
+        const issues = validateFloor(f);
+        if (issues.length) failures.push(`seed ${seed}: ${issues.join('; ')}`);
+        if (depth === 1 && !f.rooms.some((r) => r.type === 'boss'))
+          failures.push(`seed ${seed}: no boss`);
+        if (depth === 0 && !f.props.some((p) => p.kind === 'stairs'))
+          failures.push(`seed ${seed}: no way down`);
+        if (f.props.some((p) => p.kind === 'captive')) captives++;
+        if (f.props.some((p) => p.kind === 'torch')) lights++;
+      } catch (e) {
+        failures.push(`seed ${seed}: ${(e as Error).message}`);
+      }
+    }
+    expect(failures.slice(0, 10)).toEqual([]);
+    expect(captives).toBe(500);
+    expect(lights).toBeGreaterThan(900);
+  });
+
+  it('glades are not rectangles: trees inside room bounds', () => {
+    const f = generateFloor({ seed: 99, biome: 'forest', depth: 0, floors: 2 });
+    let trees = 0;
+    let cells = 0;
+    for (const r of f.rooms) {
+      for (let y = r.rect.y; y < r.rect.y + r.rect.h; y++)
+        for (let x = r.rect.x; x < r.rect.x + r.rect.w; x++) {
+          cells++;
+          if (f.tiles[y * f.w + x] === 2) trees++;
+        }
+    }
+    expect(trees / cells).toBeGreaterThan(0.1);
+  });
+
+  it('crypt keeps Borgan captive on floor 2', () => {
+    const f = generateFloor({ seed: 5, biome: 'crypt', depth: 1, floors: 3 });
+    expect(f.props.filter((p) => p.kind === 'captive')).toHaveLength(1);
+  });
+});

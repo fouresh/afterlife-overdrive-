@@ -11,6 +11,7 @@ import {
   type Character,
 } from '../save';
 import type { ItemInstance } from '../items';
+import { activeGoals } from '../story';
 import type { Loadout } from '../stats';
 import type { ShopSlot } from '../world';
 
@@ -32,6 +33,8 @@ export const NetCharSchema = z.object({
   loadout: LoadoutSchema,
   potions: z.number().int().min(0).max(3),
   elixir: z.string().max(16).nullable(),
+  /** Goals of active story quests (captives spawn only while someone needs them). */
+  quests: z.array(z.string().max(48)).max(20).default([]),
 });
 export type NetChar = z.infer<typeof NetCharSchema>;
 
@@ -55,6 +58,7 @@ export function netCharOf(c: Character): NetChar {
     loadout: JSON.parse(JSON.stringify(c.loadout)) as Loadout,
     potions: c.potions,
     elixir: c.elixir,
+    quests: activeGoals(c),
   };
 }
 
@@ -64,6 +68,7 @@ export function setupOfNetChar(c: NetChar): PlayerSetup {
     loadout: JSON.parse(JSON.stringify(c.loadout)) as Loadout,
     potions: c.potions,
     hardcore: c.hardcore,
+    quests: [...c.quests],
     progress: { level: c.level, attrs: { ...c.attrs }, origin: c.origin, elixir: c.elixir },
   };
 }

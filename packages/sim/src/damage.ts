@@ -5,6 +5,7 @@ import { dropSeed, rollItem, rollRarity } from './items';
 import { ES, spawnPickup } from './spawn';
 import { Rng } from '@ao/shared';
 import { HIT_IFRAMES, type SimPlayer, type World } from './world';
+import { storyEvent } from './story';
 
 /** Apply damage to an enemy. Returns true if it died. */
 export function damageEnemy(
@@ -61,7 +62,10 @@ export function killEnemy(w: World, i: number, killer: number): void {
   if (room >= 0 && w.rooms[room]) w.rooms[room]!.alive = Math.max(0, w.rooms[room]!.alive - 1);
   const k = killer >= 0 ? w.players[killer] : undefined;
   if (k) k.kills++;
-  if (def.rank === 'boss') w.bossKilled = true;
+  if (def.rank === 'boss') {
+    w.bossKilled = true;
+    storyEvent(w, `boss:${def.id}`);
+  }
   for (const p of w.players) if (!p.dead) p.killsBy[def.id] = (p.killsBy[def.id] ?? 0) + 1;
   for (const p of w.players) {
     if (p.dead) continue;

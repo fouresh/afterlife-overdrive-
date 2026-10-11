@@ -7,6 +7,8 @@ export interface TilesetDef {
   floor: string;
   floorWeights: number[];
   wallTop: string;
+  /** Wall top frame weights (default: frame 0 only). */
+  wallTopWeights?: number[];
   wallFace: string;
   wallFaceWeights: number[];
   door: string;
@@ -19,6 +21,14 @@ export interface TilesetDef {
   background: string;
   /** Warm light color for torches/glows. */
   light: number;
+  /** Sprites of interactive/animated props. */
+  torch: string;
+  pillar: string;
+  stairs: string;
+  spikes: string;
+  /** Pit fill and edge colors (crypt: void, forest: water). */
+  pit: string;
+  pitEdge: string;
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
@@ -40,6 +50,38 @@ export const TILESETS: Record<string, TilesetDef> = {
     rim: '#4f4d66',
     background: '#0d0a12',
     light: 0xf2a14c,
+    torch: 'crypt.torch',
+    pillar: 'crypt.pillar',
+    stairs: 'crypt.stairs',
+    spikes: 'crypt.spikes',
+    pit: '#05030a',
+    pitEdge: '#4f4d66',
+  },
+  forest: {
+    id: 'forest',
+    floor: 'forest.floor',
+    floorWeights: [7, 3, 1, 2],
+    wallTop: 'forest.wallTop',
+    wallTopWeights: [1, 1],
+    wallFace: 'forest.wallFace',
+    wallFaceWeights: [3, 2],
+    door: 'forest.door',
+    doorLocked: 'crypt.doorLocked',
+    decor: {
+      flowers: 'forest.flowers',
+      mushroom: 'forest.mushroom',
+      tuft: 'forest.tuft',
+      stone: 'forest.stone',
+    },
+    rim: '#2a6435',
+    background: '#0b140e',
+    light: 0x36c4b4,
+    torch: 'forest.glow',
+    pillar: 'forest.tree',
+    stairs: 'forest.burrow',
+    spikes: 'forest.thorns',
+    pit: '#113a44',
+    pitEdge: '#36c4b4',
   },
 };
 

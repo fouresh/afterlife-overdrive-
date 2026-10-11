@@ -41,11 +41,14 @@ pnpm --filter @ao/server dev                            # wrangler dev (API + DO
 ```
 packages/shared   RNG (sfc32), dsin/dcos/datan2, BinWriter/BinReader, PlayerInput, names (фильтр),
                   net.ts (типы бинарных сообщений, пакет изменений ввода)
-packages/content  палитра, спрайты, paper-doll, тайлсеты, данные (оружие, броня, артефакты,
-                  аффиксы, враги, биомы, комнаты, хаб), zod-схемы, русские строки контента
-packages/procgen  Tile, DungeonFloor, BSP-крипта, роли комнат, наполнение, валидатор, хаб
+packages/content  палитра, спрайты, paper-doll, тайлсеты (crypt, forest), данные (оружие, броня,
+                  артефакты, аффиксы, враги, биомы, комнаты, хаб, npcs, story — задания,
+                  диалоги, правила реплик), zod-схемы, русские строки (i18n/ru.ts, story-ru.ts)
+packages/procgen  Tile, DungeonFloor, BSP-крипта, лес (layout-glades), роли комнат, наполнение
+                  (декор, свет, пленники), валидатор, хаб
 packages/sim      Entities (SoA), step(), бой/ИИ/лут; save.ts (схема сохранения v2),
                   account.ts (операции хаба, итоги забега), economy.ts, progression.ts,
+                  story.ts (события забега, задания, диалоги, миграция старых героев),
                   net/ (snapshot.ts — дельта-снапшоты, inputs.ts — InputQueue/Predictor,
                   protocol.ts — JSON-сообщения комнаты + zod, mirror.ts — зеркальный мир)
 apps/client       Vite + Preact UI + Pixi рендер; src/game (host, renderer, atlas, tilemap,
@@ -79,8 +82,10 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 - Новый спрайт → добавить в реестр (`packages/content/src/registry.ts`), тест проверит размеры.
 - Бюджет бандла — `bundle-budget.json`; меню/редкие экраны грузить через `import()`.
 - Тест-хуки: `window.__AO__ = { screen, state() }`; с `?e2e=1` ещё `enterCombat()`, `grant()`,
-  `finishFloor()`, `talk(stationId)`, `dropNet()` (разрыв WebSocket в кооп-забеге) и
-  бессмертие игрока в соло. `?seed=N` фиксирует seed забега,
+  `finishFloor()` (на последнем этаже — с событием `clear:<биом>`), `rescue()` (освободить
+  пленника этажа), `talk(stationId)` (открыть панель без диалога), `dropNet()` (разрыв
+  WebSocket в кооп-забеге) и бессмертие игрока в соло. Новый герой в e2e сначала видит диалог
+  пробуждения — `createHero` его пропускает. `?seed=N` фиксирует seed забега,
   `?debug=1` — оверлей. Хелперы e2e — `e2e/helpers.ts` (`createHero`, `enterDungeon`).
 - Python-замены в файлах после Prettier часто молча не срабатывают (переносы строк) —
   проверяйте `assert old in s` или используйте Edit.
@@ -93,6 +98,13 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
   Playwright сам поднимает и гасит wrangler dev.
 
 ## Как добавлять контент (без правок движка)
+
+- Сюжет: задание — запись в `data/story.ts` (`QUESTS`, цель = событие `clear:<биом>`,
+  `rescue:<npc>`, `boss:<враг>`), диалог — `DIALOGS` + тексты в `i18n/story-ru.ts`, когда он
+  звучит — `STORY_RULES`. Пленник — `captives` у биома. Тест `content.test.ts` проверит связи.
+- Биом: `data/biomes.ts` (генератор `bsp`/`glades`, враги, этажи, `requires` — флаг доступа),
+  тайлсет в `tilesets.ts`, спрайты тайлов в `sprites/tiles-<биом>.ts` (можно генерировать
+  кодом, см. лес), шаблоны комнат с `biomes: [...]`. `pnpm floor-map 42 1 f.png forest`.
 
 - Оружие: запись в `packages/content/src/data/weapons.ts` (архетип атаки + спрайт в руке из
   `sprites/items.ts`). Снаряд — в `data/projectiles.ts`.
@@ -116,13 +128,13 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 ## Состояние (обновлять в конце сессии)
 
 - **Готово:** M0 (`m0-foundation`, PR #1), M1 (`m1-solo-run`, PR #2), M2 (`m2-character-hub`,
-  PR #3), M3 (`m3-multiplayer`, PR #4). Ветки цепочкой: каждая следующая сделана от предыдущей;
-  мержить по порядку через merge commit.
+  PR #3), M3 (`m3-multiplayer`, PR #4), M4 (`m4-story-chapter1`, PR #5). Ветки цепочкой:
+  каждая следующая сделана от предыдущей; мержить по порядку через merge commit.
 - **GitHub Actions в репозитории не стартуют** (startup_failure даже у пустого workflow) —
   проблема настроек/биллинга аккаунта владельца, описано в PR #1. Пока проверяем всё локально.
-- **Дальше:** M4 — сюжет главы 1: биом «Шепчущий лес» (поляны и тропы), босс главы, диалоги
-  NPC и текстовые катсцены, квесты (засчитываются всем участникам отряда, у кого активны),
-  переезд спасённых NPC в хаб по флагам. Мелкие хвосты M3 — в ROADMAP.
+- **Дальше:** M5 — техноруины (модульная сетка) и/или глава 2 (Гномьи шахты, пещеры на
+  клеточных автоматах), английский язык (второй словарь), музыка, баланс, аукцион. Мелкие
+  хвосты M3/M4 — в ROADMAP.
 - **Известные ограничения:** документация Cloudflare (developers.cloudflare.com) не открывается
   из облачной сессии — лимиты сверены через веб-поиск (октябрь 2026). Кооп-забег не
   возобновляется после перезагрузки страницы (место держится 45 с, но клиент его не помнит).

@@ -60,7 +60,7 @@ export function validateFloor(f: DungeonFloor): string[] {
       issues.push(`spawn outside its room`);
   }
   for (const p of f.props) {
-    if (p.kind === 'chest' || p.kind === 'stairs' || p.kind === 'shop') {
+    if (p.kind === 'chest' || p.kind === 'stairs' || p.kind === 'shop' || p.kind === 'captive') {
       const i = idx(p.x, p.y);
       if (tiles[i] !== Tile.Floor || withKey[i]! < 0)
         issues.push(`${p.kind} not reachable at ${p.x},${p.y}`);
