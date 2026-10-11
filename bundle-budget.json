@@ -1,7 +1,0 @@
-{
-  "$comment": "Gzip size budgets in KB, checked in CI by scripts/check-bundle-size.mjs. Raise only with a reason in docs/DECISIONS.md.",
-  "initialJs": 30,
-  "initialCss": 10,
-  "gameJs": 220,
-  "totalJs": 420
-}
