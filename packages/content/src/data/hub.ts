@@ -2,8 +2,11 @@ import type { Appearance, EquipLook } from '../sprites/character';
 import { NPCS } from './npcs';
 
 /**
- * The personal hub ("Убежище" under the old chapel of Тихий Брод). The layout is a broad,
- * readable central plaza with three service nooks along each side and a clear route to the portal.
+ * The personal hub ("Убежище" under the old chapel of Тихий Брод): one wide, mirror-symmetric
+ * plaza. The spawn, altar and portal sit on the centre column; forge, stash (left) and market,
+ * memorial (right) line the side walls, alchemist and board flank the altar. Stations are solid
+ * objects placed by HUB_MAP letters; a station with `requires` only appears once that story flag
+ * is set (rescued NPCs move in: Borgan → forge, Sai → market).
  */
 export interface HubStation {
   id: 'forge' | 'alchemist' | 'market' | 'stash' | 'altar' | 'board' | 'portal' | 'memorial';
@@ -48,21 +51,19 @@ export const HUB_STATIONS: HubStation[] = [
 
 /** '#': wall, 'T': torch wall, 'P': pillar, '.': floor, '@': spawn, letters: stations. */
 export const HUB_MAP = `
-######################################
-#T####T####T####T####T####T####T####T#
-#....................................#
-#...A......P......S......P......B....#
-#....................................#
-#....................................#
-#..F....P........................M...#
-#....................................#
-#...............@....................#
-#....................................#
-#....................................#
-#..C....P........................L...#
-#....................................#
-#..................O.................#
-#....................................#
-#T####T####T####T####T####T####T####T#
-######################################
+#######################################
+#T#####T#####T#####T#####T#####T#####T#
+#.....................................#
+#...A......P.......S.......P......B...#
+#.....................................#
+#..F....P.....................P....M..#
+#.....................................#
+#..................@..................#
+#.....................................#
+#..C....P.....................P....L..#
+#.....................................#
+#..................O..................#
+#.....................................#
+#.....................................#
+#######################################
 `;
