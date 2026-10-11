@@ -7,3 +7,4 @@ export * from './content';
 export * from './data/affixes';
 export { STARTER_WEAPONS } from './data/weapons';
 export * from './i18n/ru';
+export * from './data/hub';

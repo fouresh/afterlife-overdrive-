@@ -9,8 +9,11 @@ import {
   composeCharacter,
   contentRu,
   getContent,
+  type Appearance,
   type EquipLook,
+  type HubStation,
 } from '@ao/content';
+import type { DungeonFloor } from '@ao/procgen';
 import { TICK_DT, TILE, emptyInput, type PlayerInput } from '@ao/shared';
 import {
   EF,
@@ -19,7 +22,10 @@ import {
   PropKind,
   carryOut,
   createFloorWorld,
+  createWorld,
   equipFromBag,
+  initFloorEntities,
+  addPlayer,
   itemBase,
   recomputeStats,
   rollItem,
@@ -81,6 +87,8 @@ export interface HostCallbacks {
   onOutcome(outcome: Outcome): void;
   toast(text: string, kind?: 'info' | 'warn' | 'good'): void;
   hurtFlash(): void;
+  /** Hub: the player talked to a station (index into the active station list). */
+  onTalk?(station: number): void;
 }
 
 let atlasPromise: Promise<Atlas> | null = null;
@@ -90,7 +98,7 @@ export function getAtlas(): Promise<Atlas> {
   return atlasPromise;
 }
 
-function lookOf(l: Loadout): EquipLook {
+export function lookOf(l: Loadout): EquipLook {
   const look: EquipLook = {};
   const mat = (it: ItemInstance | null) => {
     if (!it) return undefined;
@@ -170,20 +178,47 @@ export class GameHost {
   private disposers: (() => void)[] = [];
   private reportedOutcome: Outcome = 'playing';
 
+  /** Player appearances by player index (paper-doll). */
+  appearances: Appearance[] = [DEFAULT_APPEARANCE];
+  /** Hub stations (by station prop ref) when in hub mode. */
+  stations: HubStation[] = [];
+  private npcSheets = new Map<number, Sheet>();
+  private cfg: RunConfig = { seed: 1, biome: 'crypt', floors: 3 };
+
   constructor(
     private canvas: HTMLCanvasElement,
-    private cfg: RunConfig,
     private cb: HostCallbacks,
   ) {}
 
-  async start(depth: number, players: PlayerSetup[]): Promise<void> {
+  /** Start a dungeon run at `depth`. */
+  async start(cfg: RunConfig, depth: number, players: PlayerSetup[]): Promise<void> {
+    this.cfg = cfg;
+    await this.init();
+    this.loadFloor(depth, players);
+    this.begin();
+  }
+
+  /** Start the personal hub scene. */
+  async startHub(floor: DungeonFloor, stations: HubStation[], player: PlayerSetup): Promise<void> {
+    this.stations = stations;
+    await this.init();
+    const w = createWorld(floor, floor.seed, { runSeed: floor.seed });
+    addPlayer(w, player);
+    initFloorEntities(w);
+    this.setWorld(w);
+    this.begin();
+  }
+
+  private async init(): Promise<void> {
     const vp = readViewport();
     this.atlas = await getAtlas();
     await this.renderer.init(this.canvas, vp, TILESETS.crypt!.background);
     this.fx = new Fx(this.atlas);
     this.renderer.fxLayer.addChild(this.fx.layer);
     this.renderer.glowLayer.addChild(this.fx.glow);
-    this.loadFloor(depth, players);
+  }
+
+  private begin(): void {
     this.input.attach(this.canvas);
     this.updateResStat();
     this.disposers.push(
@@ -205,9 +240,14 @@ export class GameHost {
 
   /** Build the world and its views for a floor. */
   private loadFloor(depth: number, players: PlayerSetup[]): void {
+    this.setWorld(createFloorWorld(this.cfg, depth, players));
+    diagSet('seed', `${this.cfg.seed} floor ${depth}`);
+  }
+
+  private setWorld(world: World): void {
     this.view?.destroy();
     this.tilemap?.destroy();
-    this.world = createFloorWorld(this.cfg, depth, players);
+    this.world = world;
     if (flags.e2e) {
       const p = this.world.players[0]!;
       this.world.e.maxHp[p.ent] = 1e6;
@@ -223,10 +263,13 @@ export class GameHost {
       this.fx,
       this.world,
       (i) => this.playerSheet(i),
+      (station) => this.npcSheet(station),
+      this.stations,
       {
         hitStop: (s) => (this.hitStopT = Math.max(this.hitStopT, s)),
         toast: (t, k) => this.cb.toast(t, k),
         hurtFlash: () => this.cb.hurtFlash(),
+        talk: (station) => this.cb.onTalk?.(station),
       },
       tileset,
     );
@@ -234,8 +277,6 @@ export class GameHost {
     this.renderer.camX = this.world.e.x[p.ent]!;
     this.renderer.camY = this.world.e.y[p.ent]!;
     this.stats.seed = this.world.seed;
-    diagSet('seed', `${this.cfg.seed} floor ${depth}`);
-    diagSet('screen', 'game');
     this.acc = 0;
   }
 
@@ -251,11 +292,35 @@ export class GameHost {
     if (!s || this.sheetLook[index] !== version) {
       s?.destroy();
       const look = p ? lookOf(p.loadout) : {};
-      s = new Sheet(composeCharacter(DEFAULT_APPEARANCE, look), CHAR_W, CHAR_H, CHAR_OX, CHAR_OY);
+      const appearance = this.appearances[index] ?? DEFAULT_APPEARANCE;
+      s = new Sheet(composeCharacter(appearance, look), CHAR_W, CHAR_H, CHAR_OX, CHAR_OY);
       this.sheets[index] = s;
       this.sheetLook[index] = version;
     }
     return s.entry;
+  }
+
+  private npcSheet(station: number): AtlasEntry | null {
+    const st = this.stations[station];
+    if (!st?.npc) return null;
+    let s = this.npcSheets.get(station);
+    if (!s) {
+      s = new Sheet(
+        composeCharacter(st.npc.appearance, st.npc.look),
+        CHAR_W,
+        CHAR_H,
+        CHAR_OX,
+        CHAR_OY,
+      );
+      this.npcSheets.set(station, s);
+    }
+    return s.entry;
+  }
+
+  /** Rebuild the local player's paper-doll (appearance or equipment changed outside the sim). */
+  refreshLook(): void {
+    const p = this.world.players[0];
+    if (p) p.lookVersion++;
   }
 
   command(c: Command): void {
@@ -323,6 +388,7 @@ export class GameHost {
         const sy = (w.e.y[p.ent]! - 10 + this.renderer.world.y) / v.logicalH;
         this.input.sample(this.inputs[0]!, { x: sx, y: sy }, v.logicalW / v.logicalH);
         step(w, this.inputs);
+        this.trackAttacker();
         this.view!.handleEvents();
         this.acc -= TICK_DT;
         steps++;
@@ -350,6 +416,27 @@ export class GameHost {
       this.cb.onOutcome(w.outcome);
     }
   };
+
+  private trackAttacker(): void {
+    // Remember the closest live enemy when we get hurt (cheap heuristic for "killed by").
+    const w = this.world;
+    const ev = w.events;
+    for (let k = 0; k < ev.n; k++) {
+      if (ev.type[k] !== 10 || ev.a[k] !== 0) continue;
+      const e = w.e;
+      let best = -1;
+      let bestD = Infinity;
+      for (let i = 0; i < e.hi; i++) {
+        if (!e.alive[i] || e.kind[i] !== Kind.Enemy) continue;
+        const d = (e.x[i]! - ev.x[k]!) ** 2 + (e.y[i]! - ev.y[k]!) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      if (best >= 0) this.lastAttacker = getContent().enemies[e.def[best]!]?.id ?? '';
+    }
+  }
 
   private updateHud(): void {
     const w = this.world;
@@ -384,7 +471,13 @@ export class GameHost {
         if (k === PropKind.Chest) h.interact = { label: 'Открыть сундук', color: '#f2c94c' };
         else if (k === PropKind.Stairs) h.interact = { label: 'Спуститься', color: '#36c4b4' };
         else if (k === PropKind.Portal) h.interact = { label: 'Войти в портал', color: '#36c4b4' };
-        else if (k === PropKind.Shop) {
+        else if (k === PropKind.Station) {
+          const st = this.stations[e.ref[j]!];
+          if (st) {
+            const who = st.npc ? contentRu[st.npc.nameKey] : contentRu[st.nameKey];
+            h.interact = { label: st.npc ? `Говорить: ${who}` : (who ?? ''), color: '#aaf6ec' };
+          }
+        } else if (k === PropKind.Shop) {
           const slot = w.shop[e.ref[j]!];
           if (slot && !slot.sold) {
             const name = slot.potion ? 'Зелье лечения' : slot.item ? itemName(slot.item) : '?';
@@ -490,6 +583,13 @@ export class GameHost {
     this.world.outcome = this.world.floor.isLast ? 'victory' : 'exit';
   }
 
+  /** Enemy id that last damaged the local player (hardcore memorial). */
+  lastHitBy(): string {
+    return this.lastAttacker;
+  }
+
+  private lastAttacker = '';
+
   /** Current run carry (for summaries and saving). */
   carry(): PlayerSetup[] {
     return carryOut(this.world);
@@ -507,6 +607,7 @@ export class GameHost {
     this.view?.destroy();
     this.tilemap?.destroy();
     for (const s of this.sheets) s?.destroy();
+    for (const s of this.npcSheets.values()) s.destroy();
     this.renderer.destroy();
   }
 }

@@ -41,8 +41,7 @@ export default defineConfig({
     host: true,
     proxy: { '/api': { target: 'http://localhost:8787', ws: true } },
   },
-  preview: {
-    proxy: { '/api': { target: 'http://localhost:8787', ws: true } },
-  },
+  // No API proxy in preview (e2e runs without the Worker; the client falls back to offline mode).
+  preview: { proxy: {} },
   plugins: [pwaPlugin()],
 });

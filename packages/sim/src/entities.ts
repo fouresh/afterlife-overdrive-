@@ -44,6 +44,8 @@ export const PropKind = {
   Shop: 3,
   Portal: 4,
   Spikes: 5,
+  /** Hub station (ref = station index): interacting emits Ev.Talk. */
+  Station: 6,
 } as const;
 
 /** Pickup kinds stored in `def` for Kind.Pickup. */

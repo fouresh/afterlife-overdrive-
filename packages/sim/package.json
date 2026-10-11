@@ -12,6 +12,7 @@
   "dependencies": {
     "@ao/content": "workspace:*",
     "@ao/procgen": "workspace:*",
-    "@ao/shared": "workspace:*"
+    "@ao/shared": "workspace:*",
+    "zod": "^4.1.0"
   }
 }

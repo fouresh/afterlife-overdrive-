@@ -1,3 +1,4 @@
+import { HUB_MAP } from '@ao/content';
 import { Tile } from './tiles';
 import type { DungeonFloor, PropInfo } from './types';
 
@@ -23,7 +24,14 @@ const ARENA = `
 ############################
 `;
 
-export function parseAsciiFloor(src: string, seed = 1): DungeonFloor {
+/**
+ * Parse an ASCII map. `stations` maps extra letters to station prop indices (hub).
+ */
+export function parseAsciiFloor(
+  src: string,
+  seed = 1,
+  stations: Record<string, number> = {},
+): DungeonFloor {
   const rows = src
     .split('\n')
     .map((r) => r.trimEnd())
@@ -69,6 +77,11 @@ export function parseAsciiFloor(src: string, seed = 1): DungeonFloor {
           break;
         default:
           tiles[i] = Tile.Floor;
+          if (stations[ch] !== undefined) {
+            // Stations are solid objects (drawn over a floor tile by the renderer).
+            tiles[i] = Tile.Wall;
+            props.push({ kind: 'station', x, y, room: 0, v: stations[ch] });
+          }
       }
     }
   }
@@ -103,4 +116,11 @@ export function parseAsciiFloor(src: string, seed = 1): DungeonFloor {
 
 export function arenaFloor(): DungeonFloor {
   return parseAsciiFloor(ARENA);
+}
+
+/** The hub floor: stations whose story requirement is met get a prop. */
+export function hubFloor(letters: Record<string, number>, seed = 7): DungeonFloor {
+  const f = parseAsciiFloor(HUB_MAP, seed, letters);
+  f.biome = 'crypt';
+  return f;
 }

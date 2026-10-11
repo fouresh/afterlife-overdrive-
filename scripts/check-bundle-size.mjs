@@ -33,7 +33,7 @@ const initialCss = [...initialKeys]
   .filter((f, i, a) => a.indexOf(f) === i)
   .reduce((s, f) => s + gz(f), 0);
 
-const gameKey = Object.keys(manifest).find((k) => k.includes('GameScreen'));
+const gameKey = Object.keys(manifest).find((k) => /GameRoot|GameScreen/.test(k));
 const gameKeys = gameKey ? collect(gameKey) : new Set();
 for (const k of initialKeys) gameKeys.delete(k);
 const gameJs = [...gameKeys].reduce((s, k) => s + gz(manifest[k].file), 0);

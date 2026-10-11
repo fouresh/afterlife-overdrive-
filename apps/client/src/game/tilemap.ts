@@ -29,8 +29,11 @@ export class TilemapView {
 
   private bake(): void {
     const f = this.floor;
+    // Pillars and hub stations stand on solid tiles but are drawn as sprites over a floor.
     const pillarTiles = new Set(
-      f.props.filter((p) => p.kind === 'pillar').map((p) => p.y * f.w + p.x),
+      f.props
+        .filter((p) => p.kind === 'pillar' || p.kind === 'station')
+        .map((p) => p.y * f.w + p.x),
     );
     const decorByTile = new Map<number, string[]>();
     for (const p of f.props) {

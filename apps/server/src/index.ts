@@ -8,6 +8,7 @@ export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) {
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
       try {
         return await handleApi(request, env);
       } catch (err) {

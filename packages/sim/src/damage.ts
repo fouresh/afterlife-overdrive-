@@ -61,6 +61,8 @@ export function killEnemy(w: World, i: number, killer: number): void {
   if (room >= 0 && w.rooms[room]) w.rooms[room]!.alive = Math.max(0, w.rooms[room]!.alive - 1);
   const k = killer >= 0 ? w.players[killer] : undefined;
   if (k) k.kills++;
+  if (def.rank === 'boss') w.bossKilled = true;
+  for (const p of w.players) if (!p.dead) p.killsBy[def.id] = (p.killsBy[def.id] ?? 0) + 1;
   for (const p of w.players) {
     if (p.dead) continue;
     p.xp += def.xp;
@@ -109,8 +111,9 @@ export function dropLoot(
 export function dropItem(w: World, p: SimPlayer, x: number, y: number, boost: number): void {
   const seed = dropSeed(w.runSeed, p.index, p.dropCount++);
   const rng = new Rng(seed);
-  const rarity = rollRarity(rng, w.depth, boost);
-  const level = 1 + w.depth * 2 + rng.int(0, 1);
+  const rarity = rollRarity(rng, w.depth, boost + w.lootBoost);
+  // Item level follows the player's level (personal loot) plus floor depth and difficulty.
+  const level = Math.max(1, p.progress.level + w.depth + w.itemLevelBonus + rng.int(-1, 1));
   const item = rollItem(
     rng.nextU32(),
     level,
