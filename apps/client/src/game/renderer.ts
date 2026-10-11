@@ -20,6 +20,7 @@ export class Renderer {
   shake = 0;
   private shakeX = 0;
   private shakeY = 0;
+  private shakeTime = 0;
 
   async init(canvas: HTMLCanvasElement, viewport: Viewport, background: string): Promise<void> {
     this.viewport = viewport;
@@ -59,28 +60,69 @@ export class Renderer {
     applyCanvasSize(this.app.canvas, v);
   }
 
-  /** Center the camera on (x, y) world px, clamped to the map, with screen shake. */
-  updateCamera(x: number, y: number, mapW: number, mapH: number, dt: number): void {
+  /**
+   * Follow a world-space target with a small dead zone and velocity look-ahead.
+   * Velocity is measured in world pixels per simulation tick.
+   */
+  updateCamera(
+    x: number,
+    y: number,
+    mapW: number,
+    mapH: number,
+    dt: number,
+    velocityX = 0,
+    velocityY = 0,
+  ): void {
     const v = this.viewport;
     const halfW = v.logicalW / 2;
     const halfH = v.logicalH / 2;
-    const k = 1 - Math.pow(0.0001, dt); // frame-rate independent smoothing
-    this.camX += (x - this.camX) * k;
-    this.camY += (y - this.camY) * k;
-    if (Math.abs(x - this.camX) > 200 || Math.abs(y - this.camY) > 200) {
-      this.camX = x;
-      this.camY = y;
+    const lookX = Math.max(-24, Math.min(24, velocityX * 5));
+    const lookY = Math.max(-16, Math.min(16, velocityY * 4));
+    const targetX = x + lookX;
+    const targetY = y + lookY;
+
+    // Keep tiny player movements from making the whole world drift every frame.
+    const deadX = Math.min(24, v.logicalW * 0.08);
+    const deadY = Math.min(14, v.logicalH * 0.06);
+    const desiredX =
+      targetX > this.camX + deadX
+        ? targetX - deadX
+        : targetX < this.camX - deadX
+          ? targetX + deadX
+          : this.camX;
+    const desiredY =
+      targetY > this.camY + deadY
+        ? targetY - deadY
+        : targetY < this.camY - deadY
+          ? targetY + deadY
+          : this.camY;
+
+    // Exponential smoothing is stable at variable frame rates.
+    const k = 1 - Math.exp(-dt * 10);
+    if (Math.abs(targetX - this.camX) > 200 || Math.abs(targetY - this.camY) > 200) {
+      this.camX = targetX;
+      this.camY = targetY;
+    } else {
+      this.camX += (desiredX - this.camX) * k;
+      this.camY += (desiredY - this.camY) * k;
     }
-    const cx = mapW <= v.logicalW ? mapW / 2 : Math.min(Math.max(this.camX, halfW), mapW - halfW);
-    const cy = mapH <= v.logicalH ? mapH / 2 : Math.min(Math.max(this.camY, halfH), mapH - halfH);
+
+    // Clamp the camera center so the map edge never reveals empty space.
+    const cx =
+      mapW <= v.logicalW ? mapW / 2 : Math.min(Math.max(this.camX, halfW), mapW - halfW);
+    const cy =
+      mapH <= v.logicalH ? mapH / 2 : Math.min(Math.max(this.camY, halfH), mapH - halfH);
+
+    // Smooth, decaying shake avoids the harsh random-pixel buzz of per-frame randomness.
     if (this.shake > 0) {
-      const s = this.shake;
-      this.shakeX = (Math.random() * 2 - 1) * s;
-      this.shakeY = (Math.random() * 2 - 1) * s;
-      this.shake = Math.max(0, this.shake - dt * 30);
+      this.shakeTime += dt;
+      this.shakeX = Math.sin(this.shakeTime * 57) * this.shake;
+      this.shakeY = Math.cos(this.shakeTime * 43) * this.shake * 0.72;
+      this.shake = Math.max(0, this.shake - dt * 22);
     } else {
       this.shakeX = 0;
       this.shakeY = 0;
+      this.shakeTime = 0;
     }
     this.world.x = Math.round(halfW - cx + this.shakeX);
     this.world.y = Math.round(halfH - cy + this.shakeY);
@@ -88,6 +130,7 @@ export class Renderer {
 
   addShake(amount: number): void {
     this.shake = Math.min(6, Math.max(this.shake, amount));
+    this.shakeTime = 0;
   }
 
   /** Visible world rectangle (for culling). */
