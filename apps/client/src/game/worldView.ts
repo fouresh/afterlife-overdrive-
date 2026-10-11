@@ -47,7 +47,7 @@ export interface ViewHooks {
  */
 export class WorldView {
   private views: (View | undefined)[] = [];
-  private torches: { sprite: Sprite; glow: Sprite; phase: number }[] = [];
+  private torches: { sprite: Sprite; glow: Sprite; phase: number; speed: number }[] = [];
   private doors: { sprite: Sprite; i: number; locked: Sprite }[] = [];
   private statics: Container[] = [];
   private time = 0;
@@ -87,7 +87,12 @@ export class WorldView {
         g.alpha = 0.35;
         g.scale.set(1.4);
         this.r.glowLayer.addChild(g);
-        this.torches.push({ sprite: s, glow: g, phase: (p.x * 13 + p.y * 7) % 10 });
+        this.torches.push({
+          sprite: s,
+          glow: g,
+          phase: (p.x * 13 + p.y * 7) % 10,
+          speed: this.tileset.id === 'forest' ? 3.2 : 5.5,
+        });
         this.statics.push(s, g);
       } else if (p.kind === 'pillar') {
         const s = makeSprite(this.atlas.get(this.tileset.pillar));
@@ -324,7 +329,7 @@ export class WorldView {
     // Torch flicker
     const torch = this.atlas.get(this.tileset.torch);
     for (const t of this.torches) {
-      t.sprite.texture = torch.frames[Math.floor(this.time * 6 + t.phase) & 1]!;
+      t.sprite.texture = torch.frames[Math.floor(this.time * t.speed + t.phase) % torch.frames.length]!;
       t.glow.alpha =
         0.3 + 0.06 * Math.sin(this.time * 9 + t.phase) + 0.03 * Math.sin(this.time * 23);
     }
