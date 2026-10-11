@@ -54,6 +54,13 @@ export async function createHero(
   for (let i = 0; i < 6; i++) await page.getByTestId('intro').click({ position: { x: 20, y: 20 } });
   await page.getByTestId('btn-intro-done').click();
   await expect(page.getByTestId('hub')).toBeVisible();
+  // Chapter 1 starts with Mira's awakening dialog on the first hub visit.
+  await expect(page.getByTestId('dialog')).toHaveAttribute('data-dialog', 'ch1.awaken', {
+    timeout: 20_000,
+  });
+  await shot?.('dialog');
+  await page.getByTestId('dialog-skip').click();
+  await expect(page.getByTestId('journal')).toContainText('Первые шаги');
   await page.waitForFunction(
     () => window.__AO__?.screen === 'hub' && typeof window.__AO__?.talk === 'function',
     null,

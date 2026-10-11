@@ -8,3 +8,5 @@ export * from './data/affixes';
 export { STARTER_WEAPONS } from './data/weapons';
 export * from './i18n/ru';
 export * from './data/hub';
+export * from './data/npcs';
+export { QUEST_HINTS } from './data/story';

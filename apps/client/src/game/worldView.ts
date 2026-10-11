@@ -1,6 +1,7 @@
 import {
   CHAR_ANIMS,
   RARITY_COLORS,
+  contentRu,
   getContent,
   type HubStation,
   type TilesetDef,
@@ -59,6 +60,7 @@ export class WorldView {
     private world: World,
     private playerSheet: (index: number) => AtlasEntry,
     private npcSheet: (station: number) => AtlasEntry | null,
+    private npcOf: (npcIndex: number) => AtlasEntry | null,
     private stations: HubStation[],
     private hooks: ViewHooks,
     tileset: TilesetDef,
@@ -76,7 +78,7 @@ export class WorldView {
       const cx = p.x * TILE + TILE / 2;
       const cy = p.y * TILE + TILE / 2;
       if (p.kind === 'torch') {
-        const s = makeSprite(this.atlas.get('crypt.torch'));
+        const s = makeSprite(this.atlas.get(this.tileset.torch));
         s.position.set(cx, cy);
         this.r.decalLayer.addChild(s);
         const g = makeSprite(glow);
@@ -88,13 +90,13 @@ export class WorldView {
         this.torches.push({ sprite: s, glow: g, phase: (p.x * 13 + p.y * 7) % 10 });
         this.statics.push(s, g);
       } else if (p.kind === 'pillar') {
-        const s = makeSprite(this.atlas.get('crypt.pillar'));
+        const s = makeSprite(this.atlas.get(this.tileset.pillar));
         s.position.set(cx, (p.y + 1) * TILE - 1);
         s.zIndex = (p.y + 1) * TILE - 2;
         this.r.actorLayer.addChild(s);
         this.statics.push(s);
       } else if (p.kind === 'stairs') {
-        const s = makeSprite(this.atlas.get('crypt.stairs'));
+        const s = makeSprite(this.atlas.get(this.tileset.stairs));
         s.anchor.set(0.5);
         s.position.set(cx, cy);
         this.r.decalLayer.addChild(s);
@@ -198,8 +200,13 @@ export class WorldView {
           glow.tint = 0x36c4b4;
           glow.scale.set(1.2);
           this.r.glowLayer.addChild(glow);
-        } else if (k === PropKind.Spikes) entry = this.atlas.get('crypt.spikes');
-        else if (k === PropKind.Station) {
+        } else if (k === PropKind.Spikes) entry = this.atlas.get(this.tileset.spikes);
+        else if (k === PropKind.Captive) {
+          // The NPC stands in a cage (cage drawn over them).
+          entry = this.npcOf(e.ref[i]!) ?? this.atlas.get('fx.white');
+          extra = makeSprite(this.atlas.get('prop.cage'));
+          root.addChild(extra);
+        } else if (k === PropKind.Station) {
           const st = this.stations[e.ref[i]!];
           entry = this.atlas.get(st?.object ?? 'fx.white');
           const npc = this.npcSheet(e.ref[i]!);
@@ -315,7 +322,7 @@ export class WorldView {
       }
     }
     // Torch flicker
-    const torch = this.atlas.get('crypt.torch');
+    const torch = this.atlas.get(this.tileset.torch);
     for (const t of this.torches) {
       t.sprite.texture = torch.frames[Math.floor(this.time * 6 + t.phase) & 1]!;
       t.glow.alpha =
@@ -351,7 +358,7 @@ export class WorldView {
     v.body.rotation = 0;
     const moving = p.moving || p.dashT > 0;
     const frames = moving ? CHAR_ANIMS.run : CHAR_ANIMS.idle;
-    const idx = frames[Math.floor(this.time * (moving ? 10 : 2)) % frames.length]!;
+    const idx = frames[Math.abs(Math.floor(this.time * (moving ? 10 : 2))) % frames.length]!;
     const flash = e.hitFlash[i]! > 0;
     v.body.texture = (flash ? v.entry.flash : v.entry.frames)[idx]!;
     const aim = p.aim;
@@ -480,7 +487,14 @@ export class WorldView {
     const w = this.world;
     const e = w.e;
     const k = e.def[i]!;
-    if (k === PropKind.Chest) v.body.texture = v.entry.frames[e.state[i] ? 1 : 0]!;
+    if (k === PropKind.Captive) {
+      const frames = CHAR_ANIMS.idle;
+      v.body.texture = v.entry.frames[frames[Math.floor(this.time * 2 + i) % frames.length]!]!;
+      if (v.extra) v.extra.texture = this.atlas.get('prop.cage').frames[e.state[i] ? 1 : 0]!;
+      v.body.scale.x = Math.sin(this.time * 0.7 + i) > 0 ? 1 : -1;
+      if (e.state[i] && Math.random() < 0.15)
+        this.fx.mote(x + (Math.random() - 0.5) * 12, y - 10, 0xf2c94c, 0.6);
+    } else if (k === PropKind.Chest) v.body.texture = v.entry.frames[e.state[i] ? 1 : 0]!;
     else if (k === PropKind.Spikes) v.body.texture = v.entry.frames[e.state[i] === 2 ? 1 : 0]!;
     else if (k === PropKind.Shop) {
       const slot = w.shop[e.ref[i]!];
@@ -736,6 +750,14 @@ export class WorldView {
             this.hooks.talk(a);
           }
           break;
+        case Ev.Rescue: {
+          sfx.play('unlock');
+          sfx.play('victory', { vol: 0.5 });
+          this.fx.burst(x, y - 10, 0xf2c94c, 18, 70, { up: 90 });
+          const npc = getContent().npcs[a];
+          if (npc) this.hooks.toast(`${contentRu[npc.nameKey] ?? npc.id} свободен!`, 'good');
+          break;
+        }
         case Ev.Revive:
           sfx.play('heal', { pitch: 1.2 });
           this.fx.anim('fx.ring', x, y - 6, {

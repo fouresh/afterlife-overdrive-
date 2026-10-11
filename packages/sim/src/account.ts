@@ -26,6 +26,7 @@ import { ATTRIBUTE_KEYS, CONTRACTS, ELIXIRS, addXp, type Attributes } from './pr
 import type { PlayerSetup } from './player';
 import { STASH_SIZE, realmOf, type AccountSave, type Character, type Realm } from './save';
 import type { Loadout } from './stats';
+import { activeGoals, completeQuests } from './story';
 
 /**
  * Account operations used by the hub (and later validated by the server). Each returns
@@ -305,6 +306,9 @@ export interface RunReward {
   gold: number;
   items: ItemInstance[];
   lost: ItemInstance[];
+  /** Story quests completed by this run (ids) and cutscenes to show afterwards. */
+  quests?: string[];
+  cutscenes?: string[];
 }
 
 /** The loadout the character takes into a run (consumes potions and the elixir). */
@@ -313,6 +317,7 @@ export function runSetup(c: Character): PlayerSetup {
     loadout: JSON.parse(JSON.stringify(c.loadout)) as Loadout,
     potions: c.potions,
     hardcore: c.hardcore,
+    quests: activeGoals(c),
     progress: { level: c.level, attrs: { ...c.attrs }, origin: c.origin, elixir: c.elixir },
   };
   return setup;
@@ -386,9 +391,26 @@ export function applyRunResult(
   if (res.outcome === 'victory') c.stats.victories++;
   if (carry.loadout) c.loadout = carry.loadout;
   c.potions = Math.min(MAX_CARRIED_POTIONS, carry.potions ?? 0);
-  const gold = carry.gold ?? 0;
-  r.gold += gold;
+  let gold = carry.gold ?? 0;
   const toStash = carry.bag ?? [];
   r.stash = [...toStash, ...r.stash].slice(0, STASH_SIZE);
-  return { levels, xp, gold, items: found, lost: [] };
+  // Story: quests whose goal happened during the run (alive at the end).
+  const quests = completeQuests(c, carry.story ?? []);
+  let questXp = 0;
+  let total = levels;
+  for (const q of quests) {
+    gold += q.gold;
+    questXp += q.xp;
+    total += addXp(c, q.xp);
+  }
+  r.gold += gold;
+  return {
+    levels: total,
+    xp: xp + questXp,
+    gold,
+    items: found,
+    lost: [],
+    quests: quests.map((q) => q.quest.id),
+    cutscenes: quests.flatMap((q) => (q.quest.cutscene ? [q.quest.cutscene] : [])),
+  };
 }

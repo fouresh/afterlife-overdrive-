@@ -27,6 +27,7 @@ export const ROOM_TEMPLATES: R[] = [
   {
     id: 'centerBlock',
     types: ['combat', 'key'],
+    biomes: ['crypt'],
     rows: ['.##.', '####', '####', '.##.'],
     weight: 2,
   },
@@ -46,6 +47,7 @@ export const ROOM_TEMPLATES: R[] = [
   {
     id: 'walls',
     types: ['combat', 'key'],
+    biomes: ['crypt'],
     rows: ['##.....', '#......', '.......', '......#', '.....##'],
     weight: 2,
   },
@@ -54,6 +56,29 @@ export const ROOM_TEMPLATES: R[] = [
     types: ['combat', 'key', 'start'],
     rows: ['b..b..b', '.......', 'b..b..b'],
     weight: 1,
+    biomes: ['crypt'],
+  },
+  // Forest glades: 'P' = tree, 'O' = pond.
+  {
+    id: 'grove',
+    types: ['combat', 'key', 'start'],
+    rows: ['.P.....', 'PP.....', '.......', '...e...', '.......', '.....PP', '.....P.'],
+    weight: 3,
+    biomes: ['forest'],
+  },
+  {
+    id: 'pond',
+    types: ['combat', 'key', 'start', 'shop'],
+    rows: ['..OO..', '.OOOO.', '.OOOO.', '..OO..'],
+    weight: 2,
+    biomes: ['forest'],
+  },
+  {
+    id: 'oldOak',
+    types: ['combat', 'key', 'miniboss'],
+    rows: ['.......', '.......', '...P...', '.......', '.e...e.'],
+    weight: 2,
+    biomes: ['forest'],
   },
   {
     id: 'treasure',

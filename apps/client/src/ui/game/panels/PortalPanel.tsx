@@ -1,5 +1,5 @@
-import { contentRu } from '@ao/content';
-import { DIFFICULTIES, type Difficulty } from '@ao/sim';
+import { contentRu, getContent } from '@ao/content';
+import { DIFFICULTIES, biomeUnlocked, currentMainQuest, type Difficulty } from '@ao/sim';
 import { useState } from 'preact/hooks';
 import { party } from '../../../net/party';
 import { Panel, useCtx, type PanelCtx } from './common';
@@ -11,10 +11,12 @@ const NAMES: Record<Difficulty, string> = {
   nightmare: 'Кошмар',
 };
 const DESC: Record<Difficulty, string> = {
-  normal: 'Для знакомства со склепом.',
+  normal: 'Для знакомства с миром.',
   hard: 'Враги крепче, добыча лучше (+3 к уровню предметов).',
   nightmare: 'Для бывалых. +6 к уровню предметов, редкие вещи чаще.',
 };
+
+const BIOME_ORDER = ['forest', 'crypt'];
 
 export function PortalPanel({
   ctx,
@@ -27,6 +29,16 @@ export function PortalPanel({
 }) {
   const { c } = useCtx(ctx);
   const [diff, setDiff] = useState<Difficulty>('normal');
+  const content = getContent();
+  const biomes = BIOME_ORDER.map((id) => content.biomes.get(id)!).filter(Boolean);
+  const quest = currentMainQuest(c);
+  const [biome, setBiome] = useState(() => {
+    // The biome of the current main quest, else the deepest one open.
+    const want = quest?.goal.startsWith('clear:forest') ? 'forest' : 'crypt';
+    const b = content.biomes.get(want);
+    return b && biomeUnlocked(c, b) ? want : 'forest';
+  });
+  const sel = content.biomes.get(biome)!;
   const pst = useParty();
   const inParty = pst.code !== null && pst.status === 'online';
   // A party is limited by its lowest level.
@@ -36,10 +48,27 @@ export function PortalPanel({
     <Panel title="Портал" subtitle={'Глава 1 · "Пробуждение"'} onClose={onClose}>
       <div class="inv__label">Куда</div>
       <div class="chips">
-        <button class="chip chip--sel">{contentRu['biome.crypt']}</button>
-        <button class="chip" disabled title="Откроется по сюжету">
-          Шепчущий лес 🔒
-        </button>
+        {biomes.map((b) => {
+          const open = biomeUnlocked(c, b);
+          return (
+            <button
+              key={b.id}
+              type="button"
+              class={`chip${biome === b.id ? ' chip--sel' : ''}`}
+              disabled={!open}
+              onClick={() => setBiome(b.id)}
+              data-testid={`biome-${b.id}`}
+            >
+              {contentRu[b.nameKey]}
+              {open ? '' : ' 🔒'}
+            </button>
+          );
+        })}
+      </div>
+      <div class="statline">
+        {contentRu[`biome.${sel.id}.desc`]} Этажей: {sel.floors}.
+        {biomes.some((b) => !biomeUnlocked(c, b)) &&
+          ' Склеп откроется, когда вы пройдёте лес до часовни.'}
       </div>
       <div class="inv__label">Сложность</div>
       {(Object.keys(DIFFICULTIES) as Difficulty[]).map((d) => {
@@ -67,11 +96,7 @@ export function PortalPanel({
         {c.hardcore ? ' · ☠ смерть навсегда' : ''}
       </div>
       {!inParty && (
-        <button
-          class="btn btn--primary"
-          data-testid="btn-go"
-          onClick={() => onStart('crypt', diff)}
-        >
+        <button class="btn btn--primary" data-testid="btn-go" onClick={() => onStart(biome, diff)}>
           Отправиться
         </button>
       )}
@@ -81,7 +106,7 @@ export function PortalPanel({
           data-testid="btn-go-party"
           disabled={pst.phase === 'run'}
           onClick={() => {
-            party.send({ t: 'start', biome: 'crypt', difficulty: diff });
+            party.send({ t: 'start', biome, difficulty: diff });
             onClose();
           }}
         >

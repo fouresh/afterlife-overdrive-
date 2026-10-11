@@ -1,13 +1,29 @@
-import { HUB_STATIONS, contentRu, type HubStation } from '@ao/content';
+import {
+  HUB_STATIONS,
+  contentRu,
+  getContent,
+  type DialogDef,
+  type HubStation,
+  type StoryRule,
+} from '@ao/content';
 import { hubFloor } from '@ao/procgen';
-import { netCharOf, realmOf, recomputeStats, xpToNext, type Difficulty } from '@ao/sim';
+import {
+  applyStoryRule,
+  currentMainQuest,
+  netCharOf,
+  realmOf,
+  recomputeStats,
+  storyDialog,
+  xpToNext,
+  type Difficulty,
+} from '@ao/sim';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { sfx } from '../../audio/sfx';
 import { onFatalError, showFatalError } from '../../core/errors';
 import { flags, isTouchDevice } from '../../core/flags';
 import { readViewport } from '../../core/viewport';
 import type { Atlas } from '../../game/atlas';
-import { GameHost } from '../../game/host';
+import { GameHost, lookOf } from '../../game/host';
 import { party } from '../../net/party';
 import type { AccountStore } from '../../state/account';
 import { DebugOverlay } from '../DebugOverlay';
@@ -23,7 +39,14 @@ import { MemorialPanel } from './panels/MemorialPanel';
 import { PartyPanel, partyError, useParty } from './panels/PartyPanel';
 import { PortalPanel } from './panels/PortalPanel';
 import { StashPanel } from './panels/StashPanel';
+import { DialogOverlay } from './Dialog';
 import { useToasts } from './useToasts';
+
+interface DialogState {
+  def: DialogDef;
+  rule?: StoryRule;
+  after?: () => void;
+}
 
 let pendingInvite: string | null = flags.room ?? null;
 
@@ -61,6 +84,29 @@ export function HubScene(props: {
   const [portrait, setPortrait] = useState(readViewport().portrait);
   const [toasts, toast] = useToasts();
   const stations = useMemo(() => activeStations(new Set(c.story.flags)), [c.story.flags.length]);
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+
+  /** Talk to a station: a story dialog first (if one is due), then its panel. */
+  const talk = (st: HubStation | undefined) => {
+    if (!st) return;
+    const npcId = st.npc?.id;
+    const d = npcId ? storyDialog(store.character(charId)!, npcId) : null;
+    if (d) setDialog({ def: d.dialog, rule: d.rule, after: () => setPanel(st.id) });
+    else setPanel(st.id);
+  };
+  const finishDialog = () => {
+    const d = dialog;
+    setDialog(null);
+    if (!d) return;
+    if (d.rule) {
+      const rule = d.rule;
+      void store.mutate((save) => {
+        const ch = save.characters.find((x) => x.id === charId);
+        if (ch) applyStoryRule(ch, rule);
+      });
+    }
+    d.after?.();
+  };
 
   useEffect(() => {
     const letters: Record<string, number> = {};
@@ -69,7 +115,7 @@ export function HubScene(props: {
       onOutcome: () => undefined,
       toast,
       hurtFlash: () => undefined,
-      onTalk: (i) => setPanel(stations[i]?.id ?? null),
+      onTalk: (i) => talk(stations[i]),
     });
     h.appearances = [c.appearance];
     h.input.onPause = () => setPanel((p) => (p ? null : 'menu'));
@@ -82,6 +128,9 @@ export function HubScene(props: {
       .then(() => {
         if (disposed) return;
         setHost(h);
+        // Story beats that happen on arrival (the awakening, the chapter finale).
+        const d = storyDialog(store.character(charId)!, 'hub');
+        if (d) setDialog({ def: d.dialog, rule: d.rule });
         window.__AO__ = {
           screen: 'hub',
           state: () => h.debugState(),
@@ -113,8 +162,8 @@ export function HubScene(props: {
   }, []);
 
   useEffect(() => {
-    if (host) host.paused = panel !== null || portrait;
-  }, [host, panel, portrait]);
+    if (host) host.paused = panel !== null || portrait || dialog !== null;
+  }, [host, panel, portrait, dialog]);
 
   // Party: keep the room's copy of the hero fresh; follow an invite link once.
   useEffect(() => {
@@ -130,7 +179,17 @@ export function HubScene(props: {
     });
   }, []);
 
-  const ctx: PanelCtx = { store, atlas, charId, toast };
+  const ctx: PanelCtx = {
+    store,
+    atlas,
+    charId,
+    toast,
+    say: (id) => {
+      const def = getContent().dialogs.get(id);
+      if (def) setDialog({ def });
+    },
+  };
+  const quest = currentMainQuest(c);
   const realm = realmOf(store.save, c);
   const showTouch = isTouchDevice || navigator.maxTouchPoints > 0;
   const close = () => setPanel(null);
@@ -161,6 +220,13 @@ export function HubScene(props: {
           <div class="hud__floor">
             {contentRu['hub.title']} · облако: {cloudLabel(store.cloud)}
           </div>
+          <div class="journal" data-testid="journal">
+            {quest
+              ? `▸ ${contentRu[quest.titleKey] ?? quest.id}: ${contentRu[quest.descKey] ?? ''}`
+              : c.story.flags.includes('ch1.done')
+                ? '▸ Глава 1 пройдена. Продолжение следует…'
+                : ''}
+          </div>
           {pst.code && (
             <button
               type="button"
@@ -189,6 +255,7 @@ export function HubScene(props: {
       </div>
       {host &&
         panel === null &&
+        !dialog &&
         (showTouch ? <TouchControls host={host} hubMode /> : <DesktopBar host={host} hubMode />)}
       <div class="topbar">
         <button
@@ -239,6 +306,13 @@ export function HubScene(props: {
             </button>
           </div>
         </div>
+      )}
+      {dialog && (
+        <DialogOverlay
+          dialog={dialog.def}
+          hero={{ name: c.name, appearance: c.appearance, look: lookOf(c.loadout) }}
+          onDone={finishDialog}
+        />
       )}
       {portrait && (
         <div class="overlay rotate">

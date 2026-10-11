@@ -1,4 +1,4 @@
-import { getContent, type BiomeDef, type RoomTemplate } from '@ao/content';
+import { getContent, npcIndex, type BiomeDef, type RoomTemplate } from '@ao/content';
 import type { Rng } from '@ao/shared';
 import { bfs } from './grid';
 import type { Layout } from './layout-bsp';
@@ -26,11 +26,16 @@ function stampRoom(
   type: RoomType,
   props: PropInfo[],
   blockedProp: Uint8Array,
+  biome: string,
 ): Stamp {
   const { w, tiles } = l;
   const r = l.rooms[ri]!.rect;
   const cands = getContent().rooms.filter(
-    (t) => t.types.includes(type) && t.rows[0]!.length <= r.w - 2 && t.rows.length <= r.h - 2,
+    (t) =>
+      t.types.includes(type) &&
+      (!t.biomes || t.biomes.includes(biome)) &&
+      t.rows[0]!.length <= r.w - 2 &&
+      t.rows.length <= r.h - 2,
   );
   const order: RoomTemplate[] = [];
   const pool = [...cands];
@@ -118,6 +123,9 @@ function roomConnected(l: Layout, ri: number): boolean {
   return true;
 }
 
+/** Decor kinds scattered on floor tiles (biome.decor chance per tile). */
+const SCATTER = ['bones', 'skull', 'rubble', 'flowers', 'mushroom', 'tuft', 'stone'] as const;
+
 export interface Populated {
   props: PropInfo[];
   spawns: SpawnInfo[];
@@ -140,7 +148,7 @@ export function populate(
   l.rooms.forEach((room, ri) => {
     const type = roles.types[ri]!;
     const r = room.rect;
-    const stamp = stampRoom(rng, l, ri, type, props, blockedProp);
+    const stamp = stampRoom(rng, l, ri, type, props, blockedProp, biome.id);
     templates.push(stamp.template);
     const doorCells = l.doors.filter((d) => d.room === ri).flatMap((d) => d.cells);
     const nearDoor = (i: number, d: number) => {
@@ -264,13 +272,44 @@ export function populate(
     const cob = biome.decor.cobweb ?? 0;
     if (rng.chance(cob) && tiles[r.y * w + r.x] === Tile.Floor)
       props.push({ kind: 'cobweb', x: r.x, y: r.y, room: ri });
-    for (const kind of ['bones', 'skull', 'rubble'] as const) {
+    for (const kind of SCATTER) {
       const p = biome.decor[kind] ?? 0;
+      if (p <= 0) continue;
       for (const i of freeCells) {
-        if (!blockedProp[i] && rng.chance(p))
+        if (!blockedProp[i] && tiles[i] === Tile.Floor && rng.chance(p))
           props.push({ kind, x: i % w, y: Math.floor(i / w), room: ri });
       }
     }
+    // Free-standing lights (forest glow mushrooms) on floor tiles.
+    if (biome.lights > 0) {
+      for (const i of freeCells) {
+        if (
+          !blockedProp[i] &&
+          tiles[i] === Tile.Floor &&
+          !nearDoor(i, 1) &&
+          rng.chance(biome.lights)
+        )
+          props.push({ kind: 'torch', x: i % w, y: Math.floor(i / w), room: ri });
+      }
+    }
   });
+
+  // Story captives: in the locked vault if there is one (the key matters), else the key room.
+  for (const c of biome.captives) {
+    if (c.depth !== depth) continue;
+    const ri =
+      roles.treasure >= 0 ? roles.treasure : roles.keyRoom >= 0 ? roles.keyRoom : roles.last;
+    const r = l.rooms[ri]!.rect;
+    const cells: number[] = [];
+    for (let y = r.y + 1; y < r.y + r.h - 1; y++)
+      for (let x = r.x + 1; x < r.x + r.w - 1; x++) {
+        const i = y * w + x;
+        if (tiles[i] === Tile.Floor && !blockedProp[i]) cells.push(i);
+      }
+    if (!cells.length) continue;
+    const i = rng.pick(cells);
+    blockedProp[i] = 1;
+    props.push({ kind: 'captive', x: i % w, y: Math.floor(i / w), room: ri, v: npcIndex(c.npc) });
+  }
   return { props, spawns, templates };
 }

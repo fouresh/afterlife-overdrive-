@@ -74,12 +74,18 @@ export class TilemapView {
             if (!wall) {
               any = true;
               if (t === Tile.Pit) {
-                c.fillStyle = '#05030a';
+                c.fillStyle = ts.pit;
                 c.fillRect(dx, dy, TILE, TILE);
                 if (!isPitLike(tileAt(x, y - 1))) {
-                  c.fillStyle = ts.rim;
+                  c.fillStyle = ts.pitEdge;
                   c.fillRect(dx, dy, TILE, 2);
                 }
+                // A few glints (water in the forest, dust in the crypt).
+                c.fillStyle = ts.pitEdge;
+                c.globalAlpha = 0.35;
+                c.fillRect(dx + (v % 11) + 2, dy + ((v >> 4) % 10) + 4, 3, 1);
+                c.fillRect(dx + ((v >> 2) % 9) + 3, dy + ((v >> 5) % 6) + 8, 2, 1);
+                c.globalAlpha = 1;
                 continue;
               }
               this.atlas.drawTo(c, ts.floor, pickWeighted(ts.floorWeights, v), dx, dy);
@@ -102,7 +108,13 @@ export class TilemapView {
                 any = true;
                 this.atlas.drawTo(c, ts.wallFace, pickWeighted(ts.wallFaceWeights, v), dx, dy);
               } else {
-                this.atlas.drawTo(c, ts.wallTop, 0, dx, dy);
+                this.atlas.drawTo(
+                  c,
+                  ts.wallTop,
+                  ts.wallTopWeights ? pickWeighted(ts.wallTopWeights, v) : 0,
+                  dx,
+                  dy,
+                );
                 // Rim where the wall top meets walkable space.
                 c.fillStyle = ts.rim;
                 if (!solidAt(x - 1, y)) c.fillRect(dx, dy, 1, TILE);

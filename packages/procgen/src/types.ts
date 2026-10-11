@@ -44,7 +44,13 @@ export type PropKind =
   | 'spikes'
   | 'shop'
   | 'vase'
-  | 'station';
+  | 'station'
+  | 'flowers'
+  | 'mushroom'
+  | 'tuft'
+  | 'stone'
+  /** A story NPC held captive (v = NPC index); spawned only while someone looks for them. */
+  | 'captive';
 
 export interface PropInfo {
   kind: PropKind;

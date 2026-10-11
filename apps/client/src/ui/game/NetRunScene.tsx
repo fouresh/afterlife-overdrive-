@@ -1,3 +1,4 @@
+import { DEFAULT_APPEARANCE } from '@ao/content';
 import {
   applyRunResult,
   type ItemInstance,
@@ -302,6 +303,7 @@ export function NetRunScene(props: {
           stats={summary.stats}
           reward={summary.reward}
           hardcore={!!c?.hardcore}
+          hero={{ name: c?.name ?? '', appearance: c?.appearance ?? DEFAULT_APPEARANCE }}
           onDone={props.onDone}
         />
       )}

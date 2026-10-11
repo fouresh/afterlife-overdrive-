@@ -46,6 +46,8 @@ export const PropKind = {
   Spikes: 5,
   /** Hub station (ref = station index): interacting emits Ev.Talk. */
   Station: 6,
+  /** Story NPC in a cage (ref = NPC index, state 1 = freed). */
+  Captive: 7,
 } as const;
 
 /** Pickup kinds stored in `def` for Kind.Pickup. */

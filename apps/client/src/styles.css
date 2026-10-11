@@ -1495,3 +1495,105 @@ button {
   border: 1px solid var(--gold);
   background: rgba(27, 19, 37, 0.85);
 }
+
+/* ---------- M4: story ---------- */
+.journal {
+  max-width: 46vw;
+  font-size: 13px;
+  color: var(--gold);
+  text-shadow: 1px 1px 0 var(--ink);
+}
+.questrow {
+  padding: 4px 8px;
+  background: rgba(42, 33, 64, 0.6);
+  border: 1px solid var(--dusk);
+}
+.questrow--done {
+  opacity: 0.6;
+}
+.questdone {
+  color: var(--gold);
+  text-align: center;
+}
+.dialog {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 calc(var(--safe-r) + 12px) calc(var(--safe-b) + 10px) calc(var(--safe-l) + 12px);
+  background: linear-gradient(transparent 40%, rgba(13, 10, 18, 0.75));
+  z-index: 20;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dialog--cutscene {
+  justify-content: center;
+  background: rgba(5, 3, 10, 0.94);
+}
+.dialog__box {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 14px;
+  background: rgba(27, 19, 37, 0.95);
+  border: 2px solid var(--stone);
+  box-shadow: 0 3px 0 var(--ink);
+}
+.dialog--cutscene .dialog__box {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.dialog__portrait {
+  flex: none;
+  margin-bottom: -2px;
+}
+.dialog__body {
+  flex: 1;
+  min-height: 60px;
+}
+.dialog__name {
+  font-size: 16px;
+  color: var(--accent-l);
+  margin-bottom: 2px;
+}
+.dialog__text {
+  font-size: 18px;
+  line-height: 1.35;
+}
+.dialog__rest {
+  visibility: hidden;
+}
+.dialog__box--core .dialog__text {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(54, 196, 180, 0.7);
+}
+.dialog__core {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  background: radial-gradient(circle, #aaf6ec 0 20%, #36c4b4 45%, transparent 70%);
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+.dialog__bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 760px;
+  width: 100%;
+  margin: 6px auto 0;
+}
+.dialog__hint {
+  font-size: 12px;
+  color: var(--text-dim);
+}

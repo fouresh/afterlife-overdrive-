@@ -14,6 +14,7 @@ export * from './progression';
 export * from './economy';
 export * from './save';
 export * from './account';
+export * from './story';
 export * from './net/snapshot';
 export * from './net/protocol';
 export * from './net/inputs';

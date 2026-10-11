@@ -1,5 +1,8 @@
-/** Russian strings for content keys (items, affixes, enemies, artifacts, biomes). */
+import { storyRu } from './story-ru';
+
+/** Russian strings for content keys (items, affixes, enemies, artifacts, biomes, story). */
 export const contentRu: Record<string, string> = {
+  ...storyRu,
   'item.sword.rusty': 'Ржавый меч',
   'item.sword.knight': 'Рыцарский меч',
   'item.axe.wood': 'Топор лесоруба',
@@ -71,8 +74,15 @@ export const contentRu: Record<string, string> = {
   'enemy.ghost': 'Призрак',
   'enemy.boneKnight': 'Костяной рыцарь',
   'enemy.cryptWarden': 'Хранитель склепа',
+  'enemy.wolf': 'Одичавший волк',
+  'enemy.sporeling': 'Грибник',
+  'enemy.boar': 'Старый вепрь',
+  'enemy.alphaWolf': 'Вожак стаи',
 
   'biome.crypt': 'Склеп Забытых',
+  'biome.forest': 'Шепчущий лес',
+  'biome.forest.desc': 'Поляны и тропы, волки и грибники. В конце — Вожак стаи и тропа к часовне.',
+  'biome.crypt.desc': 'Склеп под часовней: скелеты, культисты, призраки. На дне ждёт Хранитель.',
 
   'hub.title': 'Убежище',
   'hub.forge': 'Кузница',

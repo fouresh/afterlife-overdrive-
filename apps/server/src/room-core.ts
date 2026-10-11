@@ -476,7 +476,8 @@ export class RoomCore {
     const min = DIFFICULTIES[difficulty].minLevel;
     if (party.some((x) => x.char.level < min))
       return this.sendTo(m, { t: 'error', code: 'level_too_low' });
-    const info: RunInfo = { seed: this.hooks.random() >>> 0, biome, floors: 3, difficulty };
+    const floors = getContent().biomes.get(biome)?.floors ?? 3;
+    const info: RunInfo = { seed: this.hooks.random() >>> 0, biome, floors, difficulty };
     this.run = {
       info,
       world: null as unknown as World,

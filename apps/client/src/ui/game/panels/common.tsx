@@ -20,6 +20,8 @@ export interface PanelCtx {
   atlas: Atlas;
   charId: string;
   toast: (text: string, kind?: 'info' | 'warn' | 'good') => void;
+  /** Play a story dialog by id (hub only). */
+  say?: (dialogId: string) => void;
 }
 
 export function useCtx(ctx: PanelCtx): { c: Character; realm: Realm } {

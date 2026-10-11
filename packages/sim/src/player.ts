@@ -21,6 +21,7 @@ import { EF, Kind, PickupKind, PropKind, Team } from './entities';
 import { Ev } from './events';
 import { itemBase, levelScale, type ItemInstance } from './items';
 import { spawnAlly, spawnArea, spawnPickup, spawnProjectile } from './spawn';
+import { storyEvent } from './story';
 import { emptyLoadout, type Loadout } from './stats';
 import {
   BAG_SIZE,
@@ -55,6 +56,10 @@ export interface PlayerSetup {
   killsBy?: Record<string, number>;
   chests?: number;
   hardcore?: boolean;
+  /** Story events already earned in this run (carried between floors). */
+  story?: string[];
+  /** Goals of the hero's active quests. */
+  quests?: string[];
 }
 
 export function addPlayer(w: World, setup: PlayerSetup = {}): SimPlayer {
@@ -124,6 +129,8 @@ export function makeSimPlayer(w: World, index: number, ent: number, setup: Playe
     hardcore: setup.hardcore ?? false,
     revive: 0,
     buffSpeed: 0,
+    story: setup.story ? [...setup.story] : [],
+    questGoals: setup.quests ? [...setup.quests] : [],
     lootRng: new Rng(deriveSeed(w.runSeed, 'loot', index, w.depth)),
   };
 }
@@ -646,6 +653,7 @@ function updateInteract(w: World, p: SimPlayer): void {
       if (pk === PropKind.Chest && e.state[j]) continue;
       if (pk === PropKind.Stairs && !w.stairsOpen) continue;
       if (pk === PropKind.Shop && w.shop[e.ref[j]!]?.sold !== false) continue;
+      if (pk === PropKind.Captive && e.state[j]) continue;
     } else continue;
     const dx = e.x[j]! - x;
     const dy = e.y[j]! - y;
@@ -739,8 +747,15 @@ function interact(w: World, p: SimPlayer, j: number): void {
     w.outcome = 'exit';
     w.events.push(Ev.FloorExit, e.x[j]!, e.y[j]!, p.index);
   } else if (kind === PropKind.Portal) {
+    storyEvent(w, `clear:${w.floor.biome}`);
     w.outcome = 'victory';
     w.events.push(Ev.FloorExit, e.x[j]!, e.y[j]!, p.index, 1);
+  } else if (kind === PropKind.Captive) {
+    if (e.state[j]) return;
+    e.state[j] = 1;
+    const npc = w.content.npcs[e.ref[j]!];
+    if (npc) storyEvent(w, `rescue:${npc.id}`);
+    w.events.push(Ev.Rescue, e.x[j]!, e.y[j]!, e.ref[j]!, p.index);
   } else if (kind === PropKind.Station) {
     w.events.push(Ev.Talk, e.x[j]!, e.y[j]!, e.ref[j]!, p.index);
   } else if (kind === PropKind.Shop) {
