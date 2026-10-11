@@ -476,7 +476,15 @@ export class GameHost {
     const alpha = this.paused || dt === 0 ? 1 : Math.min(1, this.acc / TICK_DT);
     const px = w.e.px[p.ent]! + (w.e.x[p.ent]! - w.e.px[p.ent]!) * alpha;
     const py = w.e.py[p.ent]! + (w.e.y[p.ent]! - w.e.py[p.ent]!) * alpha;
-    this.renderer.updateCamera(px, py - 6, w.floor.w * TILE, w.floor.h * TILE, dtMs / 1000);
+    this.renderer.updateCamera(
+      px,
+      py - 6,
+      w.floor.w * TILE,
+      w.floor.h * TILE,
+      dtMs / 1000,
+      w.e.x[p.ent]! - w.e.px[p.ent]!,
+      w.e.y[p.ent]! - w.e.py[p.ent]!,
+    );
     const vr = this.renderer.visibleRect();
     this.tilemap!.cull(vr.x, vr.y, vr.w, vr.h);
     this.view!.sync(alpha, this.paused ? 0 : dt);
@@ -539,7 +547,15 @@ export class GameHost {
       cx = target === me ? e.px[i]! + (e.x[i]! - e.px[i]!) * alpha : e.x[i]!;
       cy = target === me ? e.py[i]! + (e.y[i]! - e.py[i]!) * alpha : e.y[i]!;
     }
-    this.renderer.updateCamera(cx, cy - 6, w.floor.w * TILE, w.floor.h * TILE, dt);
+    this.renderer.updateCamera(
+      cx,
+      cy - 6,
+      w.floor.w * TILE,
+      w.floor.h * TILE,
+      dt,
+      target ? e.x[target.ent]! - e.px[target.ent]! : 0,
+      target ? e.y[target.ent]! - e.py[target.ent]! : 0,
+    );
     const vr = this.renderer.visibleRect();
     this.tilemap!.cull(vr.x, vr.y, vr.w, vr.h);
     this.view!.sync(alpha, dt);
