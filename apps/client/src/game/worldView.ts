@@ -62,6 +62,8 @@ export class WorldView {
     private stations: HubStation[],
     private hooks: ViewHooks,
     tileset: TilesetDef,
+    /** Index of the player this device controls (personal loot, own sounds). */
+    private local = 0,
   ) {
     this.tileset = tileset;
     this.buildStatics();
@@ -263,7 +265,7 @@ export class WorldView {
         continue;
       }
       // Personal loot: hide other players' drops.
-      if (e.kind[i] === Kind.Pickup && e.owner[i]! >= 0 && e.owner[i] !== 0) continue;
+      if (e.kind[i] === Kind.Pickup && e.owner[i]! >= 0 && e.owner[i] !== this.local) continue;
       if (!v || v.gen !== e.gen[i] || v.kind !== e.kind[i]) {
         if (v) this.destroyView(v);
         v = this.createView(i);
@@ -339,8 +341,11 @@ export class WorldView {
     if (p.dead) {
       v.body.texture = v.entry.frames[0]!;
       v.body.rotation = Math.min(Math.PI / 2, p.deathT * 0.15) * (v.body.scale.x < 0 ? -1 : 1);
-      v.body.alpha = Math.max(0.3, 1 - p.deathT / 60);
+      v.body.alpha = Math.max(p.hardcore ? 0.3 : 0.55, 1 - p.deathT / 60);
       if (v.weapon) v.weapon.visible = false;
+      // Co-op: an ally is reviving this hero.
+      if (p.revive > 0 && Math.random() < 0.5)
+        this.fx.mote(e.x[i]! + (Math.random() - 0.5) * 12, e.y[i]! - 4, 0x7fe3a0, 0.5);
       return;
     }
     v.body.rotation = 0;
@@ -607,7 +612,7 @@ export class WorldView {
           sfx.play('dash', { pitch: a < 0 ? 1.4 : 1 });
           break;
         case Ev.Pickup:
-          if (a !== 0) break;
+          if (a !== this.local) break;
           if (b === 2) {
             sfx.play('pickup');
             this.fx.burst(x, y, RARITY_NUM[Math.max(0, v)] ?? 0xffffff, 8, 50, { up: 60 });
@@ -634,7 +639,10 @@ export class WorldView {
           sfx.play('clear', { vol: 0.8 });
           break;
         case Ev.PlayerHurt:
-          if (a !== 0) break;
+          if (a !== this.local) {
+            this.fx.burst(x, y - 8, 0xcf4440, 4, 50);
+            break;
+          }
           this.fx.number(x, y - 20, b, 0xcf4440);
           this.fx.burst(x, y - 8, 0xcf4440, 6, 60);
           sfx.play('hurt');
@@ -720,13 +728,26 @@ export class WorldView {
           sfx.play(b === 1 ? 'victory' : 'stairs');
           break;
         case Ev.Coin:
-          if (a === 0) sfx.play('coin', { vol: b < 0 ? 1 : 0.6 });
+          if (a === this.local) sfx.play('coin', { vol: b < 0 ? 1 : 0.6 });
           break;
         case Ev.Talk:
-          if (b === 0) {
+          if (b === this.local) {
             sfx.play('ui', { pitch: 1.2 });
             this.hooks.talk(a);
           }
+          break;
+        case Ev.Revive:
+          sfx.play('heal', { pitch: 1.2 });
+          this.fx.anim('fx.ring', x, y - 6, {
+            tint: 0x7fe3a0,
+            life: 0.4,
+            scale0: 0.3,
+            scale1: 1.6,
+            glow: true,
+          });
+          for (let n = 0; n < 12; n++)
+            this.fx.mote(x + (Math.random() - 0.5) * 16, y - Math.random() * 18, 0x7fe3a0, 0.8);
+          if (a === this.local) this.hooks.toast('Вас подняли!', 'good');
           break;
         case Ev.Trap:
           sfx.play('trap', { vol: 0.4 });

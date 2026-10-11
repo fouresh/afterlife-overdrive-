@@ -23,7 +23,8 @@ pnpm install            # зависимости (pnpm 10, Node 22)
 pnpm dev                # клиент на http://localhost:5173 (?debug=1 — оверлей)
 pnpm check              # lint + format:check + typecheck + test + build + size
 pnpm test               # Vitest (все пакеты)
-pnpm build && pnpm e2e  # Playwright smoke (mobile emulation) против vite preview
+pnpm build && pnpm e2e  # Playwright: smoke/screens против vite preview + multiplayer против
+                        # wrangler dev (поднимается сам: миграции D1 --local + dev на :8787)
 pnpm sprites out.png    # нарисовать все спрайты в PNG (смотреть через Read)
 pnpm floor-map 42 2 f.png  # нарисовать сгенерированный этаж (seed, глубина) в PNG
 pnpm format             # Prettier --write
@@ -38,21 +39,27 @@ pnpm --filter @ao/server dev                            # wrangler dev (API + DO
 ## Структура
 
 ```
-packages/shared   RNG (sfc32), dsin/dcos/datan2, BinWriter/BinReader, PlayerInput, names (фильтр)
+packages/shared   RNG (sfc32), dsin/dcos/datan2, BinWriter/BinReader, PlayerInput, names (фильтр),
+                  net.ts (типы бинарных сообщений, пакет изменений ввода)
 packages/content  палитра, спрайты, paper-doll, тайлсеты, данные (оружие, броня, артефакты,
                   аффиксы, враги, биомы, комнаты, хаб), zod-схемы, русские строки контента
 packages/procgen  Tile, DungeonFloor, BSP-крипта, роли комнат, наполнение, валидатор, хаб
 packages/sim      Entities (SoA), step(), бой/ИИ/лут; save.ts (схема сохранения v2),
-                  account.ts (операции хаба, итоги забега), economy.ts, progression.ts
+                  account.ts (операции хаба, итоги забега), economy.ts, progression.ts,
+                  net/ (snapshot.ts — дельта-снапшоты, inputs.ts — InputQueue/Predictor,
+                  protocol.ts — JSON-сообщения комнаты + zod, mirror.ts — зеркальный мир)
 apps/client       Vite + Preact UI + Pixi рендер; src/game (host, renderer, atlas, tilemap,
                   worldView, fx, input), src/ui (экраны; ui/game — герои, хаб, панели, забег),
                   src/state (IndexedDB, синхронизация аккаунта), src/audio (процедурные звуки),
+                  src/net (party.ts — отряд/WebSocket/переподключение, netrun.ts — сетевой забег),
                   src/core (ошибки, viewport, pwa), src/i18n, build/ (pwa-плагин, иконки, PNG)
-apps/server       Worker: src/index.ts, api.ts (аккаунт, сохранения, runs), crypto.ts,
-                  room.ts (Durable Object), migrations/*.sql (D1), test/ (API на node:sqlite),
+apps/server       Worker: src/index.ts, api.ts (аккаунт, сохранения, runs, rooms), crypto.ts,
+                  room-core.ts (логика комнаты без Cloudflare), room.ts (Durable Object),
+                  migrations/*.sql (D1), test/ (API на node:sqlite, RoomCore),
                   wrangler.jsonc (production + env.preview)
 scripts/          cf-deploy.mjs, check-bundle-size.mjs, sprite-sheet.ts, floor-map.ts
-e2e/              Playwright: smoke (герой → хаб → данж → бой), screens (тур со скриншотами)
+e2e/              Playwright: smoke (герой → хаб → данж → бой), screens (тур со скриншотами),
+                  multiplayer (2 контекста: отряд по ссылке → кооп-забег → обрыв связи → хаб)
 docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 ```
 
@@ -72,11 +79,18 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 - Новый спрайт → добавить в реестр (`packages/content/src/registry.ts`), тест проверит размеры.
 - Бюджет бандла — `bundle-budget.json`; меню/редкие экраны грузить через `import()`.
 - Тест-хуки: `window.__AO__ = { screen, state() }`; с `?e2e=1` ещё `enterCombat()`, `grant()`,
-  `finishFloor()`, `talk(stationId)` и бессмертие игрока. `?seed=N` фиксирует seed забега,
+  `finishFloor()`, `talk(stationId)`, `dropNet()` (разрыв WebSocket в кооп-забеге) и
+  бессмертие игрока в соло. `?seed=N` фиксирует seed забега,
   `?debug=1` — оверлей. Хелперы e2e — `e2e/helpers.ts` (`createHero`, `enterDungeon`).
 - Python-замены в файлах после Prettier часто молча не срабатывают (переносы строк) —
   проверяйте `assert old in s` или используйте Edit.
-- Скриншоты экранов: `e2e/screens.spec.ts` пишет `test-results/**/0N-*.png`.
+- Скриншоты экранов: `e2e/screens.spec.ts` пишет `test-results/**/0N-*.png`,
+  мультиплеер — `test-results/**/mp-*.png`.
+- Сеть: любое новое поле, нужное клиенту для отрисовки, добавляется в `KIND_FIELDS`/
+  `quantize`/`writeEntity` (snapshot.ts) — тест `net.test.ts` проверяет зеркало побитно.
+  Логику комнаты менять в `room-core.ts` и тестировать `apps/server/test/room.test.ts`.
+- `pkill -f "wrangler dev"` в Bash убивает и саму команду (совпадает строка) — не использовать;
+  Playwright сам поднимает и гасит wrangler dev.
 
 ## Как добавлять контент (без правок движка)
 
@@ -101,12 +115,14 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
 
 ## Состояние (обновлять в конце сессии)
 
-- **Готово:** M0 (`m0-foundation`, PR #1), M1 (`m1-solo-run`, PR #2), M2 (`m2-character-hub`, PR #3).
-  Ветки цепочкой: каждая следующая сделана от предыдущей.
+- **Готово:** M0 (`m0-foundation`, PR #1), M1 (`m1-solo-run`, PR #2), M2 (`m2-character-hub`,
+  PR #3), M3 (`m3-multiplayer`, PR #4). Ветки цепочкой: каждая следующая сделана от предыдущей;
+  мержить по порядку через merge commit.
 - **GitHub Actions в репозитории не стартуют** (startup_failure даже у пустого workflow) —
   проблема настроек/биллинга аккаунта владельца, описано в PR #1. Пока проверяем всё локально.
-- **Дальше:** M3 — мультиплеер: RoomDO (каркас есть), бинарный протокол в `@ao/shared`,
-  комнаты из хаба (код/ссылка `?room=`), сервер-авторитет 30 Гц с тем же `step()`,
-  предсказание/интерполяция, переподключение. Затем M4 (лес, сюжет главы 1).
+- **Дальше:** M4 — сюжет главы 1: биом «Шепчущий лес» (поляны и тропы), босс главы, диалоги
+  NPC и текстовые катсцены, квесты (засчитываются всем участникам отряда, у кого активны),
+  переезд спасённых NPC в хаб по флагам. Мелкие хвосты M3 — в ROADMAP.
 - **Известные ограничения:** документация Cloudflare (developers.cloudflare.com) не открывается
-  из облачной сессии — лимиты сверены через веб-поиск (октябрь 2026).
+  из облачной сессии — лимиты сверены через веб-поиск (октябрь 2026). Кооп-забег не
+  возобновляется после перезагрузки страницы (место держится 45 с, но клиент его не помнит).

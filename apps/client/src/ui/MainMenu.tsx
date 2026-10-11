@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { flags } from '../core/flags';
 import { applyUpdate, canInstall, onPwaChange, promptInstall, updateAvailable } from '../core/pwa';
 import { t } from '../i18n';
 import { kvGet } from '../state/db';
@@ -26,6 +27,11 @@ export function MainMenu({ onPlay, onSettings }: { onPlay: () => void; onSetting
         <div class="menu__profile" data-testid="profile-line">
           Героев: {heroes.length} ·{' '}
           {heroes.map((h) => `${h.hardcore ? '☠' : ''}${h.name} (${h.level})`).join(', ')}
+        </div>
+      )}
+      {flags.room && (
+        <div class="menu__invite" data-testid="invite-line">
+          Вас пригласили в отряд {flags.room}: нажмите «Играть» и выберите героя.
         </div>
       )}
       <div class="menu__buttons">

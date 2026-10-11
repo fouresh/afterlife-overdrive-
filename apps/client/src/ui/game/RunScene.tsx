@@ -248,14 +248,14 @@ export function RunScene(props: {
   );
 }
 
-function fmtTime(s: number): string {
+export function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
   return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
-function Summary(props: {
+export function Summary(props: {
   atlas: Atlas;
-  outcome: 'victory' | 'left' | 'dead';
+  outcome: 'victory' | 'left' | 'dead' | 'lost';
   stats: RunStats;
   reward: RunReward;
   hardcore: boolean;
@@ -263,20 +263,25 @@ function Summary(props: {
 }) {
   const s = props.stats;
   const r = props.reward;
-  const dead = props.outcome === 'dead';
+  const dead = props.outcome === 'dead' || props.outcome === 'lost';
   const title =
     props.outcome === 'victory'
       ? 'Победа!'
       : props.outcome === 'left'
         ? 'Вы вернулись живым'
-        : props.hardcore
-          ? '☠ Герой пал навсегда'
-          : 'Вы погибли';
-  const text = dead
-    ? props.hardcore
-      ? 'Его имя высечено в Зале памяти.'
-      : 'Добыча этого забега потеряна. Снаряжение, с которым вы пришли, и опыт остались.'
-    : 'Добыча сохранена: надетое на вас, остальное — на складе.';
+        : props.outcome === 'lost'
+          ? 'Связь с отрядом потеряна'
+          : props.hardcore
+            ? '☠ Герой пал навсегда'
+            : 'Вы погибли';
+  const text =
+    props.outcome === 'lost'
+      ? 'Герой жив и опыт засчитан, но добыча этого забега потеряна.'
+      : dead
+        ? props.hardcore
+          ? 'Его имя высечено в Зале памяти.'
+          : 'Добыча этого забега потеряна. Снаряжение, с которым вы пришли, и опыт остались.'
+        : 'Добыча сохранена: надетое на вас, остальное — на складе.';
   return (
     <div class="overlay" data-testid="run-summary">
       <div class={`panel runend runend--${props.outcome}`}>
@@ -304,7 +309,7 @@ function Summary(props: {
           </div>
         )}
         <button class="btn btn--primary" data-testid="btn-summary-done" onClick={props.onDone}>
-          {props.hardcore && dead
+          {props.hardcore && props.outcome === 'dead'
             ? 'К выбору героя'
             : `В ${contentRu['hub.title']?.toLowerCase() ?? 'убежище'}`}
         </button>

@@ -1,8 +1,64 @@
-import { newSave } from '@ao/sim';
+import { DEFAULT_APPEARANCE } from '@ao/content';
+import { createCharacter, netCharOf, newSave, starterItem, type NetChar } from '@ao/sim';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleApi } from '../src/api';
 import type { Env } from '../src/env';
+import { RoomCore } from '../src/room-core';
 import { createTestD1 } from './d1';
+
+/** Durable Object namespace stand-in: one RoomCore per code, same admit() contract as RoomDO. */
+function fakeRooms(db: D1Database) {
+  const cores = new Map<string, RoomCore>();
+  const hooks = (code: string) => ({
+    persist: () => undefined,
+    directory: (d: { public: boolean; players: number; state: string } | null) => {
+      if (!d) void db.prepare('DELETE FROM rooms WHERE code = ?').bind(code).run();
+      else
+        void db
+          .prepare('UPDATE rooms SET players = ?, public = ?, state = ? WHERE code = ?')
+          .bind(d.players, d.public ? 1 : 0, d.state, code)
+          .run();
+    },
+    ticking: () => undefined,
+    random: () => 42,
+    token: () => `seat-${Math.random().toString(36).slice(2)}`,
+  });
+  const transport = { send: () => undefined, close: () => undefined };
+  return {
+    idFromName: (name: string) => name,
+    get: (code: string) => ({
+      admit: async (c: string, acc: string, char: NetChar, create: boolean, pub: boolean) => {
+        let core = cores.get(c);
+        if (create) {
+          if (core && !core.isClosed) return { error: 'exists' };
+          core = new RoomCore(c, transport, hooks(c), now);
+          cores.set(c, core);
+          return core.admit(acc, char, now, pub);
+        }
+        if (!core || core.isClosed) return { error: 'not_found' };
+        return core.admit(acc, char, now);
+      },
+      fetch: async () => new Response(null, { status: 200, headers: { 'X-Room': code } }),
+    }),
+  };
+}
+
+function heroChar(name: string): NetChar {
+  return netCharOf(
+    createCharacter(
+      {
+        name,
+        appearance: DEFAULT_APPEARANCE,
+        hardcore: false,
+        origin: 'truck',
+        weapon: starterItem('sword.rusty'),
+        artifact: starterItem('art.frostNova'),
+      },
+      `id-${name}`,
+      now,
+    ),
+  );
+}
 
 let env: Env;
 let now = 1_800_000_000_000;
@@ -37,7 +93,8 @@ async function newAccount() {
 }
 
 beforeEach(() => {
-  env = { DB: createTestD1(), ENVIRONMENT: 'test' } as unknown as Env;
+  const DB = createTestD1();
+  env = { DB, ROOMS: fakeRooms(DB), ENVIRONMENT: 'test' } as unknown as Env;
 });
 
 describe('api', () => {
@@ -127,5 +184,53 @@ describe('api', () => {
     expect(r.status).toBe(200);
     expect(typeof r.body.seed).toBe('number');
     expect(String(r.body.runId)).toMatch(/^r/);
+  });
+
+  it('rooms: create, join by code, list public rooms, reject bad heroes', async () => {
+    const a = await newAccount();
+    const b = await newAccount();
+    const created = await call(
+      'POST',
+      '/api/rooms',
+      { public: true, char: heroChar('Анна') },
+      a.token,
+    );
+    expect(created.status).toBe(201);
+    const code = created.body.code as string;
+    expect(code).toMatch(/^[A-Z2-9]{5}$/);
+    expect(created.body.slot).toBe(0);
+    const joined = await call(
+      'POST',
+      `/api/rooms/${code.toLowerCase()}/join`,
+      { char: heroChar('Борис') },
+      b.token,
+    );
+    expect(joined.status).toBe(200);
+    expect(joined.body.slot).toBe(1);
+    expect(typeof joined.body.seat).toBe('string');
+    const list = await call('GET', '/api/rooms');
+    expect((list.body.rooms as { code: string }[]).map((r) => r.code)).toContain(code);
+    expect(
+      (await call('POST', '/api/rooms/ZZZZZ/join', { char: heroChar('Вера') }, b.token)).status,
+    ).toBe(404);
+    expect(
+      (await call('POST', '/api/rooms/BAD/join', { char: heroChar('Вера') }, b.token)).status,
+    ).toBe(404);
+    const cheat = { ...heroChar('Глеб'), level: 999 };
+    expect((await call('POST', `/api/rooms/${code}/join`, { char: cheat }, b.token)).status).toBe(
+      400,
+    );
+    expect(
+      (await call('POST', '/api/rooms', { public: false, char: heroChar('Анна') })).status,
+    ).toBe(401);
+    // WebSocket upgrade is routed to the room object (no auth: the seat is the credential).
+    const ws = await handleApi(
+      new Request(`https://game.test/api/rooms/${code}/ws?seat=x`, {
+        headers: { Upgrade: 'websocket' },
+      }),
+      env,
+      now,
+    );
+    expect(ws.headers.get('X-Room')).toBe(code);
   });
 });

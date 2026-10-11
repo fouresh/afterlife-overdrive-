@@ -71,6 +71,14 @@ export interface SimPlayer {
   regenAcc: number;
   dead: boolean;
   deathT: number;
+  /** Left the run (disconnected for good, surrendered or went home): entity removed. */
+  gone: boolean;
+  /** Hardcore heroes cannot be revived by allies. */
+  hardcore: boolean;
+  /** Revive progress while an ally holds Interact next to this (dead) player. */
+  revive: number;
+  /** Sum of active buff move speed (kept separately so the client can predict movement). */
+  buffSpeed: number;
   /** Loot rng stream for this player. */
   lootRng: Rng;
 }
@@ -149,6 +157,8 @@ export const DASH_RECHARGE_TICKS = 27;
 export const DASH_IFRAMES = 9;
 export const HIT_IFRAMES = 18;
 export const MAX_POTIONS = 3;
+/** Ticks an ally must hold Interact to revive a fallen (non-hardcore) player. */
+export const REVIVE_TICKS = 45;
 export const BAG_SIZE = 12;
 
 export interface WorldOptions {

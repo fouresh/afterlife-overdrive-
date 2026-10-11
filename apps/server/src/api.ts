@@ -1,4 +1,10 @@
-import { AccountSaveSchema } from '@ao/sim';
+import {
+  AccountSaveSchema,
+  NetCharSchema,
+  ROOM_CODE_ALPHABET,
+  ROOM_CODE_LENGTH,
+  normalizeRoomCode,
+} from '@ao/sim';
 import { z } from 'zod';
 import {
   normalizeCode,
@@ -126,6 +132,21 @@ async function createDevice(env: Env, accountId: string, now: number): Promise<s
 const SaveBody = z.object({ baseRev: z.number().int().min(0), save: AccountSaveSchema });
 const RecoverBody = z.object({ code: z.string().min(12).max(20) });
 const RunBody = z.object({ biome: z.string().min(1).max(24) });
+const RoomCreateBody = z.object({ public: z.boolean(), char: NetCharSchema });
+const RoomJoinBody = z.object({ char: NetCharSchema });
+const ROOM_LIST_MAX_AGE_MS = 6 * 3_600_000;
+
+function roomCode(): string {
+  const b = new Uint8Array(ROOM_CODE_LENGTH);
+  crypto.getRandomValues(b);
+  let s = '';
+  for (const x of b) s += ROOM_CODE_ALPHABET[x % ROOM_CODE_ALPHABET.length];
+  return s;
+}
+
+function roomStub(env: Env, code: string) {
+  return env.ROOMS.get(env.ROOMS.idFromName(code));
+}
 
 export async function handleApi(req: Request, env: Env, now = Date.now()): Promise<Response> {
   const url = new URL(req.url);
@@ -178,8 +199,76 @@ export async function handleApi(req: Request, env: Env, now = Date.now()): Promi
     return json({ accountId: acc.id, token });
   }
 
+  // Public rooms (no auth: read-only, one D1 query, fetched only when the list is opened).
+  if (path === '/api/rooms' && method === 'GET') {
+    const rows = await env.DB.prepare(
+      `SELECT code, players, state, leader_name AS leaderName, leader_level AS leaderLevel
+       FROM rooms WHERE public = 1 AND players > 0 AND players < 4 AND updated_at > ?
+       ORDER BY updated_at DESC LIMIT 20`,
+    )
+      .bind(now - ROOM_LIST_MAX_AGE_MS)
+      .all<{
+        code: string;
+        players: number;
+        state: string;
+        leaderName: string;
+        leaderLevel: number;
+      }>();
+    return json({ rooms: rows.results });
+  }
+
+  // WebSocket into a room: the seat token (from create/join) is the credential.
+  const ws = /^\/api\/rooms\/([A-Za-z0-9]+)\/ws$/.exec(path);
+  if (ws && method === 'GET') {
+    const code = normalizeRoomCode(ws[1]!);
+    if (!code) return error(404, 'not_found');
+    if (req.headers.get('Upgrade') !== 'websocket') return error(426, 'websocket_required');
+    return roomStub(env, code).fetch(req);
+  }
+
   const a = await auth(c);
   if (a instanceof Response) return a;
+
+  if (path === '/api/rooms' && method === 'POST') {
+    if (!(await rateLimit(env, `room:${a.id}`, 20, 3_600_000, now)))
+      return error(429, 'rate_limited');
+    const body = await readJson(req, RoomCreateBody, 32_768);
+    if (body instanceof Response) return body;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = roomCode();
+      const ins = await env.DB.prepare(
+        `INSERT OR IGNORE INTO rooms (code, public, players, state, leader_name, leader_level, created_at, updated_at)
+         VALUES (?, ?, 0, 'lobby', ?, ?, ?, ?)`,
+      )
+        .bind(code, body.public ? 1 : 0, body.char.name, body.char.level, now, now)
+        .run();
+      if (!ins.meta.changes) continue;
+      const r = await roomStub(env, code).admit(code, a.id, body.char, true, body.public);
+      if ('error' in r) {
+        if (r.error === 'exists') continue;
+        await env.DB.prepare('DELETE FROM rooms WHERE code = ?').bind(code).run();
+        return error(400, r.error);
+      }
+      return json({ code, seat: r.seat, slot: r.slot }, { status: 201 });
+    }
+    return error(503, 'no_code');
+  }
+
+  const join = /^\/api\/rooms\/([A-Za-z0-9]+)\/join$/.exec(path);
+  if (join && method === 'POST') {
+    if (!(await rateLimit(env, `join:${a.id}`, 60, 3_600_000, now)))
+      return error(429, 'rate_limited');
+    const code = normalizeRoomCode(join[1]!);
+    if (!code) return error(404, 'not_found');
+    const body = await readJson(req, RoomJoinBody, 32_768);
+    if (body instanceof Response) return body;
+    const r = await roomStub(env, code).admit(code, a.id, body.char, false, false);
+    if ('error' in r) {
+      const status = r.error === 'not_found' ? 404 : r.error === 'full' ? 409 : 400;
+      return error(status, r.error);
+    }
+    return json({ code, seat: r.seat, slot: r.slot });
+  }
 
   if (path === '/api/account/recovery' && method === 'POST') {
     if (!(await rateLimit(env, `rcgen:${a.id}`, 5, 3_600_000, now)))

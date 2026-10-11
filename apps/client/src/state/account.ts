@@ -105,6 +105,11 @@ export class AccountStore {
     this.syncTimer = setTimeout(() => void this.sync(), delay);
   }
 
+  /** Device token for authenticated calls (creates the account on first use); null offline. */
+  async authToken(): Promise<string | null> {
+    return (await this.ensureToken()) ? (this.meta.token ?? null) : null;
+  }
+
   /** Ensure a device token exists (creates an anonymous account on first use). */
   private async ensureToken(): Promise<boolean> {
     if (this.meta.token) return true;

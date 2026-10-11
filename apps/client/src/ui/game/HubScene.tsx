@@ -1,6 +1,6 @@
 import { HUB_STATIONS, contentRu, type HubStation } from '@ao/content';
 import { hubFloor } from '@ao/procgen';
-import { realmOf, recomputeStats, xpToNext, type Difficulty } from '@ao/sim';
+import { netCharOf, realmOf, recomputeStats, xpToNext, type Difficulty } from '@ao/sim';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { sfx } from '../../audio/sfx';
 import { onFatalError, showFatalError } from '../../core/errors';
@@ -8,6 +8,7 @@ import { flags, isTouchDevice } from '../../core/flags';
 import { readViewport } from '../../core/viewport';
 import type { Atlas } from '../../game/atlas';
 import { GameHost } from '../../game/host';
+import { party } from '../../net/party';
 import type { AccountStore } from '../../state/account';
 import { DebugOverlay } from '../DebugOverlay';
 import { PixelIcon } from '../PixelIcon';
@@ -19,9 +20,24 @@ import { useStore, type PanelCtx } from './panels/common';
 import { ForgePanel } from './panels/ForgePanel';
 import { MarketPanel } from './panels/MarketPanel';
 import { MemorialPanel } from './panels/MemorialPanel';
+import { PartyPanel, partyError, useParty } from './panels/PartyPanel';
 import { PortalPanel } from './panels/PortalPanel';
 import { StashPanel } from './panels/StashPanel';
 import { useToasts } from './useToasts';
+
+let pendingInvite: string | null = flags.room ?? null;
+
+/** Take the `?room=CODE` invite once (and drop it from the address bar). */
+function takeInvite(): string | null {
+  const code = pendingInvite;
+  pendingInvite = null;
+  if (code && location.search.includes('room=')) {
+    const url = new URL(location.href);
+    url.searchParams.delete('room');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }
+  return code;
+}
 
 /** Stations present for this character (story flags gate NPCs in later chapters). */
 function activeStations(flagsSet: Set<string>): HubStation[] {
@@ -40,7 +56,8 @@ export function HubScene(props: {
   const c = store.character(charId)!;
   const canvas = useRef<HTMLCanvasElement>(null);
   const [host, setHost] = useState<GameHost | null>(null);
-  const [panel, setPanel] = useState<HubStation['id'] | 'menu' | null>(null);
+  const [panel, setPanel] = useState<HubStation['id'] | 'menu' | 'party' | null>(null);
+  const pst = useParty();
   const [portrait, setPortrait] = useState(readViewport().portrait);
   const [toasts, toast] = useToasts();
   const stations = useMemo(() => activeStations(new Set(c.story.flags)), [c.story.flags.length]);
@@ -99,6 +116,20 @@ export function HubScene(props: {
     if (host) host.paused = panel !== null || portrait;
   }, [host, panel, portrait]);
 
+  // Party: keep the room's copy of the hero fresh; follow an invite link once.
+  useEffect(() => {
+    party.updateChar(netCharOf(c));
+  }, [store.save.updatedAt]);
+  useEffect(() => {
+    const code = takeInvite();
+    if (!code || (party.inParty && party.state.code === code)) return;
+    void store.authToken().then(async (token) => {
+      const err = token ? await party.join(token, code, netCharOf(c)) : 'offline';
+      if (err) toast(partyError(err) ?? err, 'warn');
+      else toast(`Вы в отряде ${code}`, 'good');
+    });
+  }, []);
+
   const ctx: PanelCtx = { store, atlas, charId, toast };
   const realm = realmOf(store.save, c);
   const showTouch = isTouchDevice || navigator.maxTouchPoints > 0;
@@ -130,6 +161,23 @@ export function HubScene(props: {
           <div class="hud__floor">
             {contentRu['hub.title']} · облако: {cloudLabel(store.cloud)}
           </div>
+          {pst.code && (
+            <button
+              type="button"
+              class={`partychip partychip--${pst.status}`}
+              onClick={() => setPanel('party')}
+              data-testid="party-chip"
+            >
+              Отряд {pst.code} · {pst.members.length}/4
+              {pst.status === 'reconnecting'
+                ? ' · связь…'
+                : pst.phase === 'run'
+                  ? ' · в забеге'
+                  : party.isLeader
+                    ? ' · вы лидер'
+                    : ''}
+            </button>
+          )}
         </div>
         <div class="toasts">
           {toasts.map((t) => (
@@ -143,6 +191,14 @@ export function HubScene(props: {
         panel === null &&
         (showTouch ? <TouchControls host={host} hubMode /> : <DesktopBar host={host} hubMode />)}
       <div class="topbar">
+        <button
+          class="btn icon-btn"
+          aria-label="Отряд"
+          data-testid="btn-party"
+          onClick={() => (sfx.play('ui'), setPanel('party'))}
+        >
+          <PixelIcon name="party" />
+        </button>
         <button
           class="btn icon-btn"
           aria-label="Меню"
@@ -161,6 +217,7 @@ export function HubScene(props: {
       {panel === 'board' && <BoardPanel ctx={ctx} onClose={close} />}
       {panel === 'memorial' && <MemorialPanel ctx={ctx} onClose={close} />}
       {panel === 'portal' && <PortalPanel ctx={ctx} onClose={close} onStart={props.onRun} />}
+      {panel === 'party' && <PartyPanel ctx={ctx} onClose={close} />}
       {panel === 'menu' && (
         <div class="overlay">
           <div class="panel">
@@ -170,6 +227,9 @@ export function HubScene(props: {
             </button>
             <button class="btn" onClick={() => setPanel('stash')}>
               Склад и снаряжение
+            </button>
+            <button class="btn" onClick={() => setPanel('party')}>
+              Отряд (мультиплеер)
             </button>
             <button class="btn" onClick={() => sfx.setMuted(!sfx.muted)}>
               Звук: {sfx.muted ? 'выкл' : 'вкл'}

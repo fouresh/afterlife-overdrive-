@@ -288,7 +288,8 @@ export function claimContract(save: AccountSave, c: Character, index: number): O
 // ---------- Runs ----------
 
 export interface RunResult {
-  outcome: 'victory' | 'left' | 'dead';
+  /** 'lost' = the connection to a co-op room was lost for good: like a death without permadeath. */
+  outcome: 'victory' | 'left' | 'dead' | 'lost';
   carry: PlayerSetup;
   /** Deepest floor reached (1-based). */
   depth: number;
@@ -311,6 +312,7 @@ export function runSetup(c: Character): PlayerSetup {
   const setup: PlayerSetup = {
     loadout: JSON.parse(JSON.stringify(c.loadout)) as Loadout,
     potions: c.potions,
+    hardcore: c.hardcore,
     progress: { level: c.level, attrs: { ...c.attrs }, origin: c.origin, elixir: c.elixir },
   };
   return setup;
@@ -360,10 +362,17 @@ export function applyRunResult(
     let add = 0;
     if (def.kind === 'kill' && def.target) add = carry.killsBy?.[def.target] ?? 0;
     else if (def.kind === 'depth')
-      add = res.depth >= def.count && res.outcome !== 'dead' ? def.count : 0;
+      add =
+        res.depth >= def.count && (res.outcome === 'victory' || res.outcome === 'left')
+          ? def.count
+          : 0;
     else if (def.kind === 'boss') add = res.bossKilled ? 1 : 0;
     else if (def.kind === 'chests') add = carry.chests ?? 0;
     k.progress = Math.min(def.count, k.progress + add);
+  }
+  if (res.outcome === 'lost') {
+    c.potions = 0;
+    return { levels, xp, gold: 0, items: [], lost: found };
   }
   if (res.outcome === 'dead') {
     c.stats.deaths++;

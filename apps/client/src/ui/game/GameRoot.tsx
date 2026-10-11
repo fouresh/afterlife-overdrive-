@@ -4,12 +4,14 @@ import { showFatalError } from '../../core/errors';
 import { flags } from '../../core/flags';
 import type { Atlas } from '../../game/atlas';
 import { getAtlas } from '../../game/host';
+import { party } from '../../net/party';
 import { getStore, type AccountStore } from '../../state/account';
 import { t } from '../../i18n';
 import { CharacterCreator, type CreatorResult } from './CharacterCreator';
 import { CharacterSelect } from './CharacterSelect';
 import { HubScene } from './HubScene';
 import { Intro } from './Intro';
+import { NetRunScene } from './NetRunScene';
 import { RunScene } from './RunScene';
 
 declare global {
@@ -22,6 +24,7 @@ declare global {
       grant?: () => void;
       finishFloor?: () => void;
       talk?: (station: string) => void;
+      dropNet?: () => void;
     };
   }
 }
@@ -32,7 +35,8 @@ type Phase =
   | { kind: 'create' }
   | { kind: 'intro'; draft: CreatorResult }
   | { kind: 'hub'; charId: string }
-  | { kind: 'run'; charId: string; cfg: RunConfig };
+  | { kind: 'run'; charId: string; cfg: RunConfig }
+  | { kind: 'netrun'; charId: string; n: number };
 
 function newId(): string {
   const b = new Uint32Array(2);
@@ -59,6 +63,21 @@ export default function GameRoot({ onExit }: { onExit: () => void }) {
 
   useEffect(() => {
     window.__AO__ = { ...window.__AO__, screen: phase.kind };
+  }, [phase.kind]);
+
+  // A co-op run started (the leader opened the portal): switch to the networked run.
+  useEffect(() => {
+    const go = () =>
+      setPhase((p) => (p.kind === 'hub' ? { kind: 'netrun', charId: p.charId, n: Date.now() } : p));
+    party.onRunStart = go;
+    return () => {
+      party.onRunStart = null;
+    };
+  }, []);
+  useEffect(() => {
+    if (phase.kind === 'hub' && party.hasPendingFloor()) {
+      setPhase({ kind: 'netrun', charId: phase.charId, n: Date.now() });
+    }
   }, [phase.kind]);
 
   if (!store || !atlas || phase.kind === 'loading') return <div class="screen">{t('loading')}</div>;
@@ -118,8 +137,13 @@ export default function GameRoot({ onExit }: { onExit: () => void }) {
           store={store}
           atlas={atlas}
           charId={phase.charId}
-          onExit={() => setPhase({ kind: 'select' })}
+          onExit={() => {
+            party.leave();
+            setPhase({ kind: 'select' });
+          }}
           onRun={(biome: string, difficulty: Difficulty) => {
+            // A solo run: no party (it would wait for us).
+            party.leave();
             void store.runSeed(biome).then(({ seed }) => {
               setPhase({
                 kind: 'run',
@@ -130,6 +154,22 @@ export default function GameRoot({ onExit }: { onExit: () => void }) {
           }}
         />
       );
+    case 'netrun': {
+      const charId = phase.charId;
+      return (
+        <NetRunScene
+          key={phase.n}
+          store={store}
+          atlas={atlas}
+          charId={charId}
+          onDone={() => {
+            const c = store.character(charId);
+            if (!c || c.dead) party.leave();
+            setPhase(c && !c.dead ? { kind: 'hub', charId } : { kind: 'select' });
+          }}
+        />
+      );
+    }
     case 'run': {
       const charId = phase.charId;
       return (

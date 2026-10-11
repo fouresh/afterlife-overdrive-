@@ -40,6 +40,8 @@ import {
 } from '@ao/sim';
 import { diagSet } from '../core/diagnostics';
 import { flags } from '../core/flags';
+import type { NetRun } from '../net/netrun';
+import { party } from '../net/party';
 import { onViewportChange, readViewport } from '../core/viewport';
 import { Atlas, type AtlasEntry } from './atlas';
 import { Fx } from './fx';
@@ -58,6 +60,8 @@ export interface HostStats {
   seed: number;
   tick: number;
   res: string;
+  /** Network line for the debug overlay ('' when solo). */
+  net: string;
 }
 
 export interface HudSkill {
@@ -133,6 +137,7 @@ export class GameHost {
     seed: 0,
     tick: 0,
     res: '',
+    net: '',
   };
   readonly hud: HudState = {
     hp: 0,
@@ -180,6 +185,12 @@ export class GameHost {
 
   /** Player appearances by player index (paper-doll). */
   appearances: Appearance[] = [DEFAULT_APPEARANCE];
+  /** Player names by index (co-op: revive prompts, party HUD). */
+  names: string[] = [];
+  /** Index of the player this device controls. */
+  localIndex = 0;
+  /** Networked run driver (null = local simulation). */
+  net: NetRun | null = null;
   /** Hub stations (by station prop ref) when in hub mode. */
   stations: HubStation[] = [];
   private npcSheets = new Map<number, Sheet>();
@@ -196,6 +207,33 @@ export class GameHost {
     await this.init();
     this.loadFloor(depth, players);
     this.begin();
+  }
+
+  /** Start a networked run: the world comes from the server (floor message + snapshots). */
+  async startNet(net: NetRun): Promise<void> {
+    this.net = net;
+    await this.init();
+    const t0 = performance.now();
+    while (!net.world) {
+      net.pump(performance.now());
+      if (net.world) break;
+      if (performance.now() - t0 > 15000) throw new Error('No floor from the server');
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    this.begin();
+  }
+
+  /** NetRun hook: a (new) floor arrived. */
+  netFloor(world: World): void {
+    const net = this.net!;
+    this.localIndex = net.local;
+    this.appearances = net.appearances.map((a) => a ?? DEFAULT_APPEARANCE);
+    this.names = net.names;
+    for (const s of this.sheets) s?.destroy();
+    this.sheets = [];
+    this.sheetLook = [];
+    this.setWorld(world);
+    diagSet('seed', `${world.runSeed} floor ${world.depth} (net)`);
   }
 
   /** Start the personal hub scene. */
@@ -248,7 +286,7 @@ export class GameHost {
     this.view?.destroy();
     this.tilemap?.destroy();
     this.world = world;
-    if (flags.e2e) {
+    if (flags.e2e && !this.net) {
       const p = this.world.players[0]!;
       this.world.e.maxHp[p.ent] = 1e6;
       this.world.e.hp[p.ent] = 1e6;
@@ -266,16 +304,21 @@ export class GameHost {
       (station) => this.npcSheet(station),
       this.stations,
       {
-        hitStop: (s) => (this.hitStopT = Math.max(this.hitStopT, s)),
+        hitStop: (s) => {
+          if (!this.net) this.hitStopT = Math.max(this.hitStopT, s);
+        },
         toast: (t, k) => this.cb.toast(t, k),
         hurtFlash: () => this.cb.hurtFlash(),
         talk: (station) => this.cb.onTalk?.(station),
       },
       tileset,
+      this.localIndex,
     );
-    const p = this.world.players[0]!;
-    this.renderer.camX = this.world.e.x[p.ent]!;
-    this.renderer.camY = this.world.e.y[p.ent]!;
+    const p = this.world.players[this.localIndex];
+    if (p) {
+      this.renderer.camX = this.world.e.x[p.ent]!;
+      this.renderer.camY = this.world.e.y[p.ent]!;
+    }
     this.stats.seed = this.world.seed;
     this.acc = 0;
   }
@@ -319,11 +362,22 @@ export class GameHost {
 
   /** Rebuild the local player's paper-doll (appearance or equipment changed outside the sim). */
   refreshLook(): void {
-    const p = this.world.players[0];
+    const p = this.world.players[this.localIndex];
     if (p) p.lookVersion++;
   }
 
+  /** The player this device controls. */
+  me() {
+    return this.world.players[this.localIndex];
+  }
+
   command(c: Command): void {
+    if (this.net) {
+      party.send(
+        c.type === 'equip' ? { t: 'equip', bag: c.bag, slot: c.slot } : { t: 'drop', bag: c.bag },
+      );
+      return;
+    }
     this.commands.push(c);
   }
 
@@ -369,6 +423,10 @@ export class GameHost {
       this.frames = 0;
       this.fpsTime = 0;
       this.worst = 0;
+    }
+    if (this.net) {
+      this.netFrame(now, dt);
+      return;
     }
     const w = this.world;
     const p = w.players[0]!;
@@ -417,6 +475,73 @@ export class GameHost {
     }
   };
 
+  private idleInput = emptyInput();
+
+  /** Networked frame: pump snapshots, predict the local player, render remote ones in the past. */
+  private netFrame(now: number, dt: number): void {
+    const net = this.net!;
+    const t0 = performance.now();
+    net.pump(now);
+    const w = this.world;
+    const me = w.players[this.localIndex];
+    const e = w.e;
+    this.acc += dt;
+    let steps = 0;
+    while (this.acc >= TICK_DT && steps < 5) {
+      if (this.paused || !me) {
+        net.localTick(this.idleInput);
+      } else {
+        const v = this.renderer.viewport;
+        const sx = (e.x[me.ent]! + this.renderer.world.x) / v.logicalW;
+        const sy = (e.y[me.ent]! - 10 + this.renderer.world.y) / v.logicalH;
+        this.input.sample(this.inputs[0]!, { x: sx, y: sy }, v.logicalW / v.logicalH);
+        net.localTick(this.inputs[0]!);
+      }
+      this.acc -= TICK_DT;
+      steps++;
+    }
+    if (steps === 5) this.acc = 0;
+    net.flushInput(now);
+    net.prepareRender(now, dt, w.events);
+    this.view!.handleEvents();
+    this.stats.simMs = performance.now() - t0;
+    const alpha = Math.min(1, this.acc / TICK_DT);
+    // Camera: own (predicted) hero, or a living teammate while dead (spectating).
+    let cx = this.renderer.camX;
+    let cy = this.renderer.camY + 6;
+    let target = me && !me.dead && !me.gone ? me : undefined;
+    if (!target) target = w.players.find((p) => !p.dead && !p.gone);
+    if (me && !me.gone) {
+      // Hide prediction corrections: render with the decaying error offset.
+      e.px[me.ent] = e.px[me.ent]! + net.pred.errX;
+      e.py[me.ent] = e.py[me.ent]! + net.pred.errY;
+      e.x[me.ent] = e.x[me.ent]! + net.pred.errX;
+      e.y[me.ent] = e.y[me.ent]! + net.pred.errY;
+    }
+    if (target) {
+      const i = target.ent;
+      cx = target === me ? e.px[i]! + (e.x[i]! - e.px[i]!) * alpha : e.x[i]!;
+      cy = target === me ? e.py[i]! + (e.y[i]! - e.py[i]!) * alpha : e.y[i]!;
+    }
+    this.renderer.updateCamera(cx, cy - 6, w.floor.w * TILE, w.floor.h * TILE, dt);
+    const vr = this.renderer.visibleRect();
+    this.tilemap!.cull(vr.x, vr.y, vr.w, vr.h);
+    this.view!.sync(alpha, dt);
+    if (me && !me.gone) {
+      e.px[me.ent] = e.px[me.ent]! - net.pred.errX;
+      e.py[me.ent] = e.py[me.ent]! - net.pred.errY;
+      e.x[me.ent] = e.x[me.ent]! - net.pred.errX;
+      e.y[me.ent] = e.y[me.ent]! - net.pred.errY;
+    }
+    this.fx.update(dt);
+    this.renderer.render();
+    this.updateHud();
+    this.stats.tick = w.tick;
+    this.stats.entities = e.countAlive();
+    const s = net.stats;
+    this.stats.net = `ping ${s.ping}ms  ${s.snapsPerSec.toFixed(0)} snap/s  ${s.kbps.toFixed(1)} KB/s  corr ${s.err.toFixed(1)}px`;
+  }
+
   private trackAttacker(): void {
     // Remember the closest live enemy when we get hurt (cheap heuristic for "killed by").
     const w = this.world;
@@ -441,7 +566,8 @@ export class GameHost {
   private updateHud(): void {
     const w = this.world;
     const e = w.e;
-    const p = w.players[0]!;
+    const p = w.players[this.localIndex];
+    if (!p) return;
     const h = this.hud;
     h.hp = Math.ceil(e.hp[p.ent]!);
     h.maxHp = e.maxHp[p.ent]!;
@@ -462,7 +588,10 @@ export class GameHost {
     const j = p.interact;
     h.interact = null;
     if (j >= 0 && e.alive[j]) {
-      if (e.kind[j] === Kind.Pickup) {
+      if (e.kind[j] === Kind.Player) {
+        const name = this.names[e.ref[j]!] ?? 'союзника';
+        h.interact = { label: `Держите «руку»: поднять ${name}`, color: '#7fe3a0' };
+      } else if (e.kind[j] === Kind.Pickup) {
         const item = w.drops[e.ref[j]!]?.item;
         if (item)
           h.interact = { label: `Взять: ${itemName(item)}`, color: RARITY_COLORS[item.rarity]! };
@@ -529,7 +658,7 @@ export class GameHost {
   debugState() {
     const w = this.world;
     const e = w.e;
-    const p = w.players[0]!;
+    const p = w.players[this.localIndex]!;
     let enemies = 0;
     for (let i = 0; i < e.hi; i++)
       if (e.alive[i] && e.kind[i] === Kind.Enemy && !(e.flags[i]! & EF.Dying)) enemies++;
@@ -537,6 +666,8 @@ export class GameHost {
       tick: w.tick,
       depth: w.depth,
       outcome: w.outcome,
+      local: this.localIndex,
+      players: w.players.map((q) => ({ x: e.x[q.ent]!, y: e.y[q.ent]!, dead: q.dead })),
       player: { x: e.x[p.ent]!, y: e.y[p.ent]!, hp: e.hp[p.ent]! },
       kills: p.kills,
       gold: p.gold,
