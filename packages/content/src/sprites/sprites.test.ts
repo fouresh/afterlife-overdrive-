@@ -53,6 +53,32 @@ describe('sprites', () => {
     }
   });
 
+  it('keeps the ink outline of every composed frame (nothing but ink on the frame edge)', () => {
+    // The run bounce lifts the body 1px: without a spare row on top the head outline was clipped.
+    const INK = [0x1b, 0x13, 0x25];
+    for (const hairStyle of HAIR_STYLES) {
+      for (const helmet of [undefined, { shape: 'cap', material: 'leather' }]) {
+        const frames = composeCharacter(
+          { ...DEFAULT_APPEARANCE, hairStyle },
+          helmet ? { helmet } : {},
+        );
+        frames.forEach((img, f) => {
+          for (let y = 0; y < img.h; y++) {
+            for (let x = 0; x < img.w; x++) {
+              if (x > 0 && y > 0 && x < img.w - 1 && y < img.h - 1) continue;
+              const i = (y * img.w + x) * 4;
+              if (img.data[i + 3] === 0) continue;
+              const ink = INK.every((c, k) => img.data[i + k] === c);
+              expect(`${hairStyle}[${f}] (${x},${y}) ink=${ink}`).toBe(
+                `${hairStyle}[${f}] (${x},${y}) ink=true`,
+              );
+            }
+          }
+        });
+      }
+    }
+  });
+
   it('composes armor looks', () => {
     const frames = composeCharacter(DEFAULT_APPEARANCE, {
       helmet: { shape: 'helm', material: 'iron' },
