@@ -48,7 +48,7 @@ export interface ViewHooks {
 export class WorldView {
   private views: (View | undefined)[] = [];
   private torches: { sprite: Sprite; glow: Sprite; phase: number; speed: number }[] = [];
-  private hubLights: { sprite: Sprite; phase: number; baseAlpha: number }[] = [];
+  private hubLights: { sprite: Sprite; phase: number; baseAlpha: number; baseScale: number }[] = [];
   private doors: { sprite: Sprite; i: number; locked: Sprite }[] = [];
   private statics: Container[] = [];
   private time = 0;
@@ -118,7 +118,7 @@ export class WorldView {
         lamp.alpha = 0.15;
         lamp.scale.set(scale);
         this.r.glowLayer.addChild(lamp);
-        this.hubLights.push({ sprite: lamp, phase, baseAlpha: 0.15 });
+        this.hubLights.push({ sprite: lamp, phase, baseAlpha: 0.15, baseScale: scale });
         this.statics.push(lamp);
       };
       addHubLight(f.start.x * TILE + TILE / 2, f.start.y * TILE + TILE / 2, 0, 1.35);
@@ -370,7 +370,7 @@ export class WorldView {
     for (const light of this.hubLights) {
       light.sprite.alpha = light.baseAlpha + 0.025 * Math.sin(this.time * 1.7 + light.phase);
       const pulse = 1 + 0.025 * Math.sin(this.time * 1.2 + light.phase);
-      light.sprite.scale.set(light.sprite.scale.x > 0 ? pulse * (light.phase === 0 ? 1.35 : 1.05) : pulse);
+      light.sprite.scale.set(light.baseScale * pulse);
     }
     // Doors
     const m = w.map;
