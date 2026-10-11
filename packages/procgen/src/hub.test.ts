@@ -5,19 +5,42 @@ import { bfs } from './grid';
 import { Tile } from './tiles';
 
 describe('hub floor', () => {
-  it('keeps a broad central plaza and enough room around the spawn', () => {
-    const f = hubFloor({});
-    expect(f.w).toBeGreaterThanOrEqual(36);
-    expect(f.h).toBeGreaterThanOrEqual(15);
-    expect(f.tiles[f.start.y * f.w + f.start.x]).toBe(Tile.Floor);
+  it('is a mirror-symmetric open plaza with a clear route from the spawn to the portal', () => {
+    const letters: Record<string, number> = {};
+    HUB_STATIONS.forEach((s, i) => (letters[s.letter] = i));
+    const f = hubFloor(letters);
+    const at = (x: number, y: number) => f.tiles[y * f.w + x];
 
-    const adjacent = [
-      (f.start.y - 1) * f.w + f.start.x,
-      (f.start.y + 1) * f.w + f.start.x,
-      f.start.y * f.w + f.start.x - 1,
-      f.start.y * f.w + f.start.x + 1,
-    ];
-    expect(adjacent.every((i) => f.tiles[i] === Tile.Floor)).toBe(true);
+    // Spawn sits on the centre column, with open floor around it.
+    expect(f.start.x).toBe((f.w - 1) / 2);
+    for (const [dx, dy] of [
+      [0, 0],
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      expect(at(f.start.x + dx, f.start.y + dy)).toBe(Tile.Floor);
+    }
+
+    // The map and its decor mirror left/right.
+    for (let y = 0; y < f.h; y++) {
+      for (let x = 0; x < f.w; x++) expect(at(x, y)).toBe(at(f.w - 1 - x, y));
+    }
+    const key = (p: { kind: string; x: number; y: number }) => `${p.kind}:${p.x},${p.y}`;
+    const props = new Set(f.props.map(key));
+    for (const p of f.props) expect(props.has(key({ ...p, x: f.w - 1 - p.x }))).toBe(true);
+
+    // Torches only decorate the top wall (row 1), never the south wall.
+    for (const p of f.props) if (p.kind === 'torch') expect(p.y).toBeLessThan(f.h / 2);
+
+    // The portal is reachable from the spawn.
+    const portal = f.props.find(
+      (p) => p.kind === 'station' && p.v === HUB_STATIONS.findIndex((s) => s.id === 'portal'),
+    );
+    expect(portal).toBeDefined();
+    const dist = bfs(f.w, f.h, [f.start.y * f.w + f.start.x], (i) => f.tiles[i] === Tile.Floor);
+    expect(dist[(portal!.y - 1) * f.w + portal!.x]).toBeGreaterThanOrEqual(0);
   });
 
   it('places every station and keeps them reachable from the spawn', () => {
