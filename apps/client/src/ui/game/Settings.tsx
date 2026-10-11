@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'preact/hooks';
 import { sfx } from '../../audio/sfx';
 import { copyText } from '../../core/errors';
+import { gfx } from '../../game/gfx';
 import { getStore, type AccountStore } from '../../state/account';
 import { useStore } from './panels/common';
 
-/** Sound + account: cloud status, recovery code (move progress to another phone). */
+/** Sound, graphics + account: cloud status, recovery code (move progress to another phone). */
 export default function Settings({ onBack }: { onBack: () => void }) {
   const [store, setStore] = useState<AccountStore | null>(null);
   useEffect(() => {
@@ -22,6 +23,7 @@ function SettingsBody({ store, onBack }: { store: AccountStore; onBack: () => vo
   const [msg, setMsg] = useState('');
   const [confirm, setConfirm] = useState(false);
   const [muted, setMuted] = useState(sfx.muted);
+  const [lighting, setLighting] = useState(gfx.lighting);
   const status = {
     off: 'выключено',
     syncing: 'синхронизация…',
@@ -41,6 +43,17 @@ function SettingsBody({ store, onBack }: { store: AccountStore; onBack: () => vo
       >
         Звук: {muted ? 'выключен' : 'включён'}
       </button>
+      <button
+        class="btn"
+        data-testid="btn-lighting"
+        onClick={() => {
+          gfx.setLighting(!lighting);
+          setLighting(!lighting);
+        }}
+      >
+        Освещение: {lighting ? 'включено' : 'выключено'}
+      </button>
+      {lighting && <div class="settings__hint">Если игра тормозит — выключите освещение.</div>}
       <div class="panel settings__box">
         <div class="settings__title">Аккаунт</div>
         <div class="runend__text">

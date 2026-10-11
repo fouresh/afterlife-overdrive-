@@ -2,6 +2,7 @@ import { ART_RES } from '@ao/content';
 import { Application, Container, Sprite, TextureSource } from 'pixi.js';
 import { applyCanvasSize, type Viewport } from '../core/viewport';
 import type { Atlas, AtlasEntry } from './atlas';
+import { Lighting } from './lighting';
 
 TextureSource.defaultOptions.scaleMode = 'nearest';
 
@@ -23,6 +24,7 @@ export class Renderer {
   readonly fxLayer = new Container();
   readonly glowLayer = new Container();
   readonly topLayer = new Container();
+  readonly lighting = new Lighting();
   viewport!: Viewport;
   camX = 0;
   camY = 0;
@@ -52,10 +54,13 @@ export class Renderer {
     applyCanvasSize(canvas, viewport);
     this.actorLayer.sortableChildren = true;
     this.glowLayer.blendMode = 'add';
+    this.lighting.resize(viewport.logicalW, viewport.logicalH);
+    // Light map multiplies everything below it; glows and effects above it stay emissive.
     this.world.addChild(
       this.floorLayer,
       this.decalLayer,
       this.actorLayer,
+      this.lighting.overlay,
       this.glowLayer,
       this.fxLayer,
       this.topLayer,
@@ -66,6 +71,7 @@ export class Renderer {
   resize(v: Viewport): void {
     this.viewport = v;
     this.app.renderer.resize(v.logicalW, v.logicalH);
+    this.lighting.resize(v.logicalW, v.logicalH);
     applyCanvasSize(this.app.canvas, v);
   }
 
@@ -152,10 +158,12 @@ export class Renderer {
   }
 
   render(): void {
+    this.lighting.render(this.app.renderer, this.world.x, this.world.y);
     this.app.render();
   }
 
   destroy(): void {
+    this.lighting.destroy();
     this.app.destroy({ removeView: false }, { children: true });
   }
 }

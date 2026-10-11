@@ -539,6 +539,7 @@ export class GameHost {
     this.tilemap!.cull(vr.x, vr.y, vr.w, vr.h);
     this.view!.sync(alpha, this.paused ? 0 : dt);
     this.fx.update(this.paused ? 0 : dt);
+    this.fx.lights(this.renderer.lighting);
     this.renderer.render();
     this.updateHud();
     this.updatePrompt();
@@ -617,6 +618,7 @@ export class GameHost {
       e.y[me.ent] = e.y[me.ent]! - net.pred.errY;
     }
     this.fx.update(dt);
+    this.fx.lights(this.renderer.lighting);
     this.renderer.render();
     this.updateHud();
     this.updatePrompt();

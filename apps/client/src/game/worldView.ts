@@ -23,6 +23,7 @@ import {
 } from '@ao/sim';
 import { Container, Sprite } from 'pixi.js';
 import { sfx } from '../audio/sfx';
+import { AMBIENT_STYLES, Ambient } from './ambient';
 import type { Atlas, AtlasEntry } from './atlas';
 import type { Fx } from './fx';
 import { makeSprite, snap, type Renderer } from './renderer';
@@ -70,6 +71,12 @@ function easeOutCubic(t: number): number {
 const hexNum = (h: string) => parseInt(h.slice(1), 16);
 const RARITY_NUM = RARITY_COLORS.map(hexNum);
 
+/** The hub is a lived-in shelter: dimmer than daylight, brighter than the dungeons. */
+const HUB_AMBIENT = 0x8a819f;
+/** Light carried by every hero (warm lantern white). */
+const HERO_LIGHT = 0xffe7c7;
+const TEAL = 0x36c4b4;
+
 export interface ViewHooks {
   /** Request a hit-stop (seconds). */
   hitStop(sec: number): void;
@@ -90,6 +97,7 @@ export class WorldView {
   private statics: Container[] = [];
   private time = 0;
   private tileset: TilesetDef;
+  private ambient: Ambient;
 
   constructor(
     private r: Renderer,
@@ -106,6 +114,13 @@ export class WorldView {
     private local = 0,
   ) {
     this.tileset = tileset;
+    const hub = stations.length > 0;
+    r.lighting.ambient = hub ? HUB_AMBIENT : tileset.ambient;
+    this.ambient = new Ambient(
+      atlas.get('fx.px').frames[0]!,
+      AMBIENT_STYLES[hub ? 'hub' : tileset.id === 'forest' ? 'forest' : 'crypt'],
+    );
+    r.glowLayer.addChild(this.ambient.layer);
     this.buildStatics();
   }
 
@@ -360,6 +375,8 @@ export class WorldView {
     this.time += dt;
     const w = this.world;
     const e = w.e;
+    const light = this.r.lighting;
+    light.begin();
     for (let i = 0; i < Math.max(e.hi, this.views.length); i++) {
       let v = this.views[i];
       if (!e.alive[i]) {
@@ -419,6 +436,7 @@ export class WorldView {
           break;
         }
       }
+      this.addLight(i, v, x, y);
     }
     for (let k = e.hi; k < this.views.length; k++) {
       const v = this.views[k];
@@ -432,20 +450,80 @@ export class WorldView {
     for (const t of this.torches) {
       t.sprite.texture =
         torch.frames[Math.floor(this.time * t.speed + t.phase) % torch.frames.length]!;
-      t.glow.alpha =
-        0.3 + 0.06 * Math.sin(this.time * 9 + t.phase) + 0.03 * Math.sin(this.time * 23);
+      const flicker = 0.06 * Math.sin(this.time * 9 + t.phase) + 0.03 * Math.sin(this.time * 23);
+      t.glow.alpha = 0.3 + flicker;
+      const forest = this.tileset.id === 'forest';
+      light.add(
+        t.sprite.x,
+        t.sprite.y + 4,
+        forest ? 58 : 84 + flicker * 40,
+        this.tileset.light,
+        (forest ? 0.75 : 0.95) + flicker,
+      );
     }
     // Gentle, asynchronous breathing keeps hub lights warm without obvious flicker.
-    for (const light of this.hubLights) {
-      light.sprite.alpha = light.baseAlpha + 0.025 * Math.sin(this.time * 1.7 + light.phase);
-      const pulse = 1 + 0.025 * Math.sin(this.time * 1.2 + light.phase);
-      light.sprite.scale.set(light.baseScale * pulse);
+    for (const lamp of this.hubLights) {
+      lamp.sprite.alpha = lamp.baseAlpha + 0.025 * Math.sin(this.time * 1.7 + lamp.phase);
+      const pulse = 1 + 0.025 * Math.sin(this.time * 1.2 + lamp.phase);
+      lamp.sprite.scale.set(lamp.baseScale * pulse);
+      light.add(lamp.sprite.x, lamp.sprite.y, 78 * pulse, 0xffc58a, 0.85);
     }
+    const vp = this.r.viewport;
+    this.ambient.update(dt, -this.r.world.x, -this.r.world.y, vp.logicalW, vp.logicalH, light);
     // Doors
     const m = w.map;
     for (const d of this.doors) {
       d.sprite.visible = m.dyn[d.i] !== 0 && m.tiles[d.i] === Tile.Door;
       d.locked.visible = m.tiles[d.i] === Tile.LockedDoor;
+    }
+  }
+
+  /** Light emitted by entity `i` (heroes carry a lantern; magic, loot and portals glow). */
+  private addLight(i: number, v: View, x: number, y: number): void {
+    const w = this.world;
+    const e = w.e;
+    const light = this.r.lighting;
+    switch (v.kind) {
+      case Kind.Player: {
+        const p = w.players[e.ref[i]!];
+        // The local hero's light is the strongest: it is where the player looks.
+        const own = e.ref[i] === this.local;
+        if (p && !p.dead) light.add(x, y - 8, own ? 132 : 96, HERO_LIGHT, own ? 0.95 : 0.7);
+        break;
+      }
+      case Kind.Enemy:
+        // A faint halo keeps enemies readable in the dark corners of a room.
+        light.add(x, y - 6, 30, 0xd8d0ff, 0.22);
+        if (e.burnT[i]! > 0) light.add(x, y - 6, 26, 0xf08b5c, 0.6);
+        break;
+      case Kind.Projectile: {
+        const def = w.content.projectiles[e.def[i]!]!;
+        if (def.glow !== undefined) light.add(x, y - 4, 40, def.glow, 0.9);
+        break;
+      }
+      case Kind.Pickup: {
+        const k = e.def[i]!;
+        if (k === PickupKind.Gold) light.add(x, y - 3, 14, 0xf2c94c, 0.35);
+        else if (v.glow) light.add(x, y - 3, 26, v.glow.tint, 0.6);
+        break;
+      }
+      case Kind.Prop: {
+        const k = e.def[i]!;
+        if (k === PropKind.Portal) light.add(x, y - 6, 92, TEAL, 1);
+        else if (k === PropKind.Stairs && w.stairsOpen) light.add(x, y, 54, TEAL, 0.8);
+        else if (k === PropKind.Station) {
+          const st = this.stations[e.ref[i]!];
+          if (st?.id === 'portal') light.add(x, y - 6, 96, TEAL, 1);
+          else if (st?.id === 'altar') light.add(x, y - 18, 64, TEAL, 0.85);
+        } else if (k === PropKind.Captive && e.state[i]) light.add(x, y - 10, 40, 0xf2c94c, 0.6);
+        break;
+      }
+      case Kind.Area:
+        light.add(x, y, e.r[i]! * 1.3, e.ref[i]!, 0.45);
+        break;
+      case Kind.Ally:
+        light.add(x, y, 44, 0xaaf6ec, 0.8);
+        break;
     }
   }
 
@@ -947,6 +1025,7 @@ export class WorldView {
     this.views = [];
     for (const s of this.statics) s.destroy();
     this.statics = [];
+    this.ambient.destroy();
     this.torches = [];
     this.hubLights = [];
     this.doors = [];

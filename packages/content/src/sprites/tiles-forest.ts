@@ -88,15 +88,16 @@ function grass(seed: number, extra: 'none' | 'blades' | 'dirt' | 'pebbles'): Pix
           p.ball(x, y, 1.6, 1.2, 'pPq');
         }
       }
-      // Blades: short strokes leaning a little, lighter tips.
-      const n = extra === 'blades' ? 46 : 26;
+      // Blades: short strokes leaning a little, lighter tips. Kept sparse and close to the
+      // ground tone: the floor is a backdrop, bright specks everywhere read as noise.
+      const n = extra === 'blades' ? 32 : 16;
       for (let k = 0; k < n; k++) {
         const x = T + r.int(0, T);
         const y = T + r.int(0, T);
         const lean = r.int(-1, 1);
         const tall = r.chance(0.3) ? 4 : 3;
-        p.line(x, y, x + lean, y - tall, r.chance(0.35) ? '4' : '3');
-        p.set(x + lean, y - tall, r.chance(0.3) ? '5' : '4');
+        p.line(x, y, x + lean, y - tall, r.chance(0.2) ? '4' : '3');
+        p.set(x + lean, y - tall, r.chance(0.08) ? '5' : r.chance(0.4) ? '4' : '3');
       }
     },
     seed,

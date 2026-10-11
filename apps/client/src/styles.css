@@ -482,21 +482,47 @@ button {
   left: calc(var(--safe-l) + 10px);
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
+}
+/* A soft scrim behind the top-left cluster keeps text readable over any floor. */
+.hud__tl::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -40px -120px -24px -60px;
+  background: radial-gradient(
+    ellipse at 15% 30%,
+    rgba(13, 10, 18, 0.62),
+    rgba(13, 10, 18, 0.3) 45%,
+    transparent 72%
+  );
+  pointer-events: none;
 }
 .hpbar {
   position: relative;
   width: 150px;
   height: 16px;
-  background: #2a2140;
-  border: 2px solid #1b1325;
-  box-shadow: 0 0 0 1px #4f4d66;
+  background: #1b1325;
+  border: 2px solid #0d0a12;
+  box-shadow:
+    0 0 0 1px #4f4d66,
+    0 2px 0 1px rgba(13, 10, 18, 0.6);
 }
 .hpbar__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: linear-gradient(#e0584a, #a3333d);
+  /* Lit top edge and a darker lower half: reads as a glass tube, not a flat box. */
+  background: linear-gradient(#f08b7a 0 2px, #d84a42 2px 55%, #a3333d 55%);
   transition: width 0.12s;
+}
+/* Recent damage lingers as a pale trail that drains after the hit. */
+.hpbar__trail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #f2c9a0;
+  opacity: 0.85;
+  transition: width 0.45s ease-in 0.3s;
 }
 .hpbar__shield {
   position: absolute;
@@ -509,7 +535,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  white-space: nowrap;
+  font-size: 14px;
   font-weight: 700;
   color: #fff;
   text-shadow:
@@ -544,10 +571,12 @@ button {
   top: calc(var(--safe-t) + 56px);
   right: calc(var(--safe-r) + 10px);
   width: 110px;
+  padding: 3px;
   image-rendering: pixelated;
-  background: rgba(13, 10, 18, 0.55);
-  border: 1px solid #3b2f5c;
-  opacity: 0.9;
+  background: rgba(13, 10, 18, 0.78);
+  border: 2px solid #2a2140;
+  box-shadow: 0 0 0 1px #4f4d66;
+  opacity: 0.92;
 }
 .bossbar {
   position: absolute;
@@ -1148,6 +1177,8 @@ button {
   flex: 1;
 }
 .xpbar--thin {
+  flex: none;
+  width: 150px;
   height: 6px;
   border-width: 1px;
 }
@@ -1332,6 +1363,11 @@ button {
 }
 .settings__msg {
   color: var(--gold);
+}
+.settings__hint {
+  margin-top: -4px;
+  font-size: 13px;
+  color: var(--text-dim);
 }
 .recovery__code {
   font-size: 28px;

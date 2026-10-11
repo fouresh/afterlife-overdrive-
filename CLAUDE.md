@@ -52,7 +52,8 @@ packages/sim      Entities (SoA), step(), бой/ИИ/лут; save.ts (схем�
                   net/ (snapshot.ts — дельта-снапшоты, inputs.ts — InputQueue/Predictor,
                   protocol.ts — JSON-сообщения комнаты + zod, mirror.ts — зеркальный мир)
 apps/client       Vite + Preact UI + Pixi рендер; src/game (host, renderer, atlas, tilemap,
-                  worldView, fx, input), src/ui (экраны; ui/game — герои, хаб, панели, забег),
+                  worldView, fx, input, lighting — карта света, ambient — светлячки/пыль,
+                  gfx — настройки графики), src/ui (экраны; ui/game — герои, хаб, панели, забег),
                   src/state (IndexedDB, синхронизация аккаунта), src/audio (процедурные звуки),
                   src/net (party.ts — отряд/WebSocket/переподключение, netrun.ts — сетевой забег),
                   src/core (ошибки, viewport, pwa), src/i18n, build/ (pwa-плагин, иконки, PNG)
@@ -147,6 +148,12 @@ docs/             GDD, ARCHITECTURE, ROADMAP, DECISIONS, SETUP_CLOUDFLARE
   объектом (решения 66–71). npm-реестр снова был закрыт: проверено юнит-тестами через Node и
   рендером спрайтов/сцен в PNG; **`pnpm check && pnpm e2e` и проверку на телефоне сделать
   перед слиянием** (особенно рендер Pixi с `resolution: 2`).
+- **Свет и читаемость (ветка `art/lighting-readability-v1`, от `main`):** карта света с
+  окружением по биому и источниками, глубина стен, пятна пола, выступы крон леса, спокойный
+  пол, светлячки/пыль, HUD (решения 72–76). Владелец подтвердил: **графика только кодом**,
+  готовые наборы ассетов не предлагать. Источник света новой сущности — `WorldView.addLight`.
+  Проверено: lint, typecheck, unit, build, e2e (таймаут поднят до 180 с). На Windows без GPU
+  e2e только `--workers=1`; мультиплеер нестабилен и на чистом `main`.
 - **Дальше:** M5 — техноруины (модульная сетка) и/или глава 2 (Гномьи шахты, пещеры на
   клеточных автоматах), английский язык (второй словарь), музыка, баланс, аукцион. Мелкие
   хвосты M3/M4 — в ROADMAP.

@@ -17,10 +17,17 @@ export interface TilesetDef {
   decor: Record<string, string>;
   /** Wall top rim highlight color. */
   rim: string;
+  /**
+   * Leafy overhang: wall tops spill over walkable ground in scalloped clumps (organic edges
+   * instead of the tile grid). The color outlines the clumps.
+   */
+  overhang?: string;
   /** Background clear color (seen outside the map). */
   background: string;
   /** Warm light color for torches/glows. */
   light: number;
+  /** Light map color of unlit areas (the scene is multiplied by it). */
+  ambient: number;
   /** Sprites of interactive/animated props. */
   torch: string;
   pillar: string;
@@ -50,6 +57,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     rim: '#4f4d66',
     background: '#0d0a12',
     light: 0xf2a14c,
+    ambient: 0x67617f,
     torch: 'crypt.torch',
     pillar: 'crypt.pillar',
     stairs: 'crypt.stairs',
@@ -74,8 +82,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       stone: 'forest.stone',
     },
     rim: '#2a6435',
+    overhang: '#0f2016',
     background: '#0b140e',
     light: 0x36c4b4,
+    ambient: 0x58707a,
     torch: 'forest.glow',
     pillar: 'forest.tree',
     stairs: 'forest.burrow',

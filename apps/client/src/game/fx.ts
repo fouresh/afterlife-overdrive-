@@ -1,5 +1,6 @@
 import { Container, Sprite, type Texture } from 'pixi.js';
 import type { Atlas } from './atlas';
+import type { Lighting } from './lighting';
 import { snap } from './renderer';
 
 /**
@@ -219,6 +220,15 @@ export class Fx {
     const parent = opts.glow ? this.glow : this.layer;
     if (a.s.parent !== parent) parent.addChild(a.s);
     return a.s;
+  }
+
+  /** Glowing one-shot effects (explosions, rings) briefly light their surroundings. */
+  lights(l: Lighting): void {
+    for (const a of this.anims) {
+      if (a.life <= 0 || a.s.parent !== this.glow) continue;
+      const r = Math.max(24, a.s.texture.width * Math.abs(a.s.scale.x) * 0.9);
+      l.add(a.s.x, a.s.y, r, a.s.tint, Math.min(1, a.s.alpha * 1.2));
+    }
   }
 
   update(dt: number): void {
