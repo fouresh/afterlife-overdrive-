@@ -245,6 +245,9 @@ export class WorldView {
         entry = this.atlas.get('fx.white');
     }
     const body = makeSprite(entry);
+    // The stairs are drawn by buildStatics(); the entity only exists for interaction. Without
+    // this it fell through to the 'fx.white' placeholder: a white square on top of the stairs.
+    if (kind === Kind.Prop && e.def[i] === PropKind.Stairs) body.visible = false;
     if (kind === Kind.Projectile || kind === Kind.Area || kind === Kind.Ally) body.anchor.set(0.5);
     if (kind === Kind.Prop && e.def[i] === PropKind.Spikes) body.anchor.set(0.5);
     root.addChild(body);
@@ -276,8 +279,15 @@ export class WorldView {
         }
         continue;
       }
-      // Personal loot: hide other players' drops.
-      if (e.kind[i] === Kind.Pickup && e.owner[i]! >= 0 && e.owner[i] !== this.local) continue;
+      // Personal loot: hide other players' drops (and drop a view left by the slot's previous
+      // occupant, otherwise it would stay frozen on screen).
+      if (e.kind[i] === Kind.Pickup && e.owner[i]! >= 0 && e.owner[i] !== this.local) {
+        if (v) {
+          this.destroyView(v);
+          this.views[i] = undefined;
+        }
+        continue;
+      }
       if (!v || v.gen !== e.gen[i] || v.kind !== e.kind[i]) {
         if (v) this.destroyView(v);
         v = this.createView(i);
@@ -329,7 +339,8 @@ export class WorldView {
     // Torch flicker
     const torch = this.atlas.get(this.tileset.torch);
     for (const t of this.torches) {
-      t.sprite.texture = torch.frames[Math.floor(this.time * t.speed + t.phase) % torch.frames.length]!;
+      t.sprite.texture =
+        torch.frames[Math.floor(this.time * t.speed + t.phase) % torch.frames.length]!;
       t.glow.alpha =
         0.3 + 0.06 * Math.sin(this.time * 9 + t.phase) + 0.03 * Math.sin(this.time * 23);
     }
@@ -581,7 +592,7 @@ export class WorldView {
           this.hooks.hitStop(big ? 0.25 : 0.04);
           if (def.rank === 'boss') {
             sfx.play('roar', { pitch: 1.3 });
-            this.hooks.toast('Хранитель склепа повержен!', 'good');
+            this.hooks.toast(`${contentRu[def.nameKey] ?? def.id} повержен!`, 'good');
           }
           break;
         }
@@ -599,7 +610,7 @@ export class WorldView {
           const thrust = b < 0;
           const range = Math.abs(b);
           if (a >= 0) {
-            const s = this.fx.anim(
+            this.fx.anim(
               'fx.slash',
               x + Math.cos(v) * range * 0.45,
               y + Math.sin(v) * range * 0.45,
@@ -609,9 +620,10 @@ export class WorldView {
                 scale0: (range / 26) * (thrust ? 0.6 : 0.9),
                 scale1: (range / 26) * (thrust ? 0.8 : 1.15),
                 alpha: 0.9,
+                // A thrust is a thin stab, not a wide arc.
+                squash: thrust ? 0.4 : 1,
               },
             );
-            if (s && thrust) s.scale.y *= 0.4;
             sfx.play('swing', { vol: 0.8 });
           } else {
             this.fx.anim('fx.slash', x + Math.cos(v) * range * 0.5, y + Math.sin(v) * range * 0.5, {

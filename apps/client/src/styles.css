@@ -280,7 +280,8 @@ button {
   height: 55%;
   image-rendering: pixelated;
 }
-.cbtn--down {
+/* Set from a data attribute: Preact rewrites `class` when the ready/off state changes mid-press. */
+.cbtn[data-down] {
   background: rgba(54, 196, 180, 0.45);
   border-color: var(--accent-l);
 }
@@ -530,6 +531,7 @@ button {
 .hud__stat img {
   width: 16px;
   height: 16px;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .hud__floor {
@@ -616,6 +618,7 @@ button {
 .cbtn__img {
   width: 70%;
   height: 70%;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .cbtn__badge {
@@ -634,9 +637,10 @@ button {
 .cbtn--ready {
   border-color: var(--accent-l);
   box-shadow: 0 0 10px rgba(54, 196, 180, 0.8);
-  animation: pulse 0.9s ease-in-out infinite;
+  animation: btn-pulse 0.9s ease-in-out infinite;
 }
-@keyframes pulse {
+/* Not `pulse`: that name is the opacity pulse of the banners below (same name = last one wins). */
+@keyframes btn-pulse {
   50% {
     transform: scale(1.08);
   }
@@ -672,6 +676,7 @@ button {
 .dbar__slot svg {
   width: 28px;
   height: 28px;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .dbar__slot .cbtn__cd {
@@ -709,8 +714,13 @@ button {
   cursor: pointer;
 }
 .itemicon img {
-  width: 36px;
-  height: 36px;
+  /* Item sprites are not square (sword 16×7, bow 9×16): keep the aspect, show them at the native
+     2× the atlas gives us instead of stretching into a 36px square. */
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .itemicon--sel {
@@ -759,6 +769,7 @@ button {
   grid-row: span 2;
   width: 40px;
   height: 40px;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .pickcard--sel {
@@ -1029,6 +1040,7 @@ button {
 .chip img {
   width: 24px;
   height: 24px;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .chip--sel {
@@ -1202,6 +1214,7 @@ button {
 .wallet img {
   width: 16px;
   height: 16px;
+  object-fit: contain;
   image-rendering: pixelated;
   vertical-align: middle;
 }
@@ -1219,6 +1232,7 @@ button {
 .shoprow img {
   width: 36px;
   height: 36px;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 .shoprow--btn {
@@ -1430,7 +1444,7 @@ button {
 }
 .netbanner {
   position: absolute;
-  top: calc(var(--safe-t) + 8px);
+  top: calc(var(--safe-t) + 54px);
   left: 50%;
   transform: translateX(-50%);
   padding: 6px 12px;
@@ -1597,7 +1611,6 @@ button {
   font-size: 12px;
   color: var(--text-dim);
 }
-
 
 /* ---------- Responsive polish: phones, notched screens, short viewports ---------- */
 :root {
@@ -1892,11 +1905,17 @@ textarea:focus-visible {
     padding: 0 0 8px;
   }
 
+  /* The action bar is pinned flush to the screen bottom (no screen padding under it) and lifts
+     the buttons by the safe area itself: no dead strip, no double-counted inset. */
+  .creator {
+    padding-bottom: 0;
+  }
+
   .creator__actions {
     position: sticky;
-    bottom: calc(var(--safe-b) - 12px);
+    bottom: 0;
     margin: 0 -4px;
-    padding: 8px 4px calc(var(--safe-b) + 4px);
+    padding: 8px 4px calc(var(--safe-b) + 12px);
     background: linear-gradient(transparent, var(--bg) 22%);
     z-index: 2;
   }
@@ -1956,7 +1975,6 @@ textarea:focus-visible {
   }
 
   .netbanner {
-    top: calc(var(--safe-t) + 54px);
     max-width: calc(100% - var(--safe-l) - var(--safe-r) - 20px);
     padding: 5px 8px;
     font-size: 12px;
@@ -2119,6 +2137,12 @@ textarea:focus-visible {
   .hud__stat,
   .hud__floor {
     font-size: 12px;
+  }
+}
+
+@media (max-height: 360px) and (orientation: landscape) {
+  .minimap {
+    width: 84px;
   }
 }
 

@@ -244,13 +244,13 @@ function ActionButton(props: {
       e.preventDefault();
       pointer = e.pointerId;
       capture(el, e.pointerId);
-      el.classList.add('cbtn--down');
+      el.dataset.down = '1';
       props.input.pressTouch(props.bit);
     };
     const up = (e: PointerEvent) => {
       if (e.pointerId !== pointer) return;
       pointer = -1;
-      el.classList.remove('cbtn--down');
+      delete el.dataset.down;
       props.input.releaseTouch(props.bit);
     };
     el.addEventListener('pointerdown', down);

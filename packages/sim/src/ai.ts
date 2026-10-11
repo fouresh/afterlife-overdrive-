@@ -131,19 +131,25 @@ export function updateEnemies(w: World): void {
         mvy = v.y * 0.5;
       }
     } else if (st === ES.Windup) {
-      const atk = attacks[e.ref[i]!]!;
-      if (target && atk.action.type !== 'charge' && atk.action.type !== 'hop') {
-        e.aux0[i] = tx;
-        e.aux1[i] = ty;
-        e.face[i] = datan2(dy, dx);
-      }
-      if (e.stateT[i]! >= secToTicks(atk.windup)) {
-        e.state[i] = ES.Act;
+      // A boss phase change swaps the attack list: the remembered slot may no longer exist.
+      const atk = attacks[e.ref[i]!];
+      if (!atk) {
+        e.state[i] = ES.Move;
         e.stateT[i] = 0;
-        e.timer[i] = 0;
-        e.dmg[i] = w.stampSeq++;
-        w.atkCd[i * MAX_ATTACKS + e.ref[i]!] = secToTicks(atk.cooldown);
-        startAction(w, i, atk);
+      } else {
+        if (target && atk.action.type !== 'charge' && atk.action.type !== 'hop') {
+          e.aux0[i] = tx;
+          e.aux1[i] = ty;
+          e.face[i] = datan2(dy, dx);
+        }
+        if (e.stateT[i]! >= secToTicks(atk.windup)) {
+          e.state[i] = ES.Act;
+          e.stateT[i] = 0;
+          e.timer[i] = 0;
+          e.dmg[i] = w.stampSeq++;
+          w.atkCd[i * MAX_ATTACKS + e.ref[i]!] = secToTicks(atk.cooldown);
+          startAction(w, i, atk);
+        }
       }
     } else if (st === ES.Act) {
       const atk = attacks[e.ref[i]!];
@@ -181,10 +187,11 @@ export function updateEnemies(w: World): void {
     separate(w, i);
     const mask =
       e.flags[i]! & EF.Phasing ? 0 : e.flags[i]! & EF.Flying ? TF.BlockShot : TF.BlockWalk;
+    // Current position, not the one from the top of the loop: `blink` teleports in startAction().
     const hit = moveBox(
       w.map,
-      x,
-      y,
+      e.x[i]!,
+      e.y[i]!,
       e.r[i]!,
       (e.vx[i]! + e.kx[i]!) * TICK_DT,
       (e.vy[i]! + e.ky[i]!) * TICK_DT,

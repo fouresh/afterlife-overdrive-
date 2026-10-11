@@ -1,5 +1,6 @@
 import { TF, Tile } from '@ao/procgen';
 import { TILE, deriveSeed } from '@ao/shared';
+import { pointBlocked } from './collide';
 import { EF, Kind, PickupKind, PropKind } from './entities';
 import { Ev } from './events';
 import { itemValue, rollItem, rollRarity } from './items';
@@ -97,6 +98,29 @@ function spawnWave(w: World, room: number, wave: number): number {
   return n;
 }
 
+const PULL_OFFSETS: readonly (readonly [number, number])[] = [
+  [6, 0],
+  [-6, 0],
+  [0, 6],
+  [0, -6],
+  [6, 6],
+  [-6, -6],
+];
+
+/** True if a body of half-size `r` centred here overlaps no walkable-blocking tile. */
+function bodyFits(w: World, x: number, y: number, r: number): boolean {
+  const k = r - 0.01;
+  for (const [dx, dy] of [
+    [-k, -k],
+    [k, -k],
+    [-k, k],
+    [k, k],
+  ] as const) {
+    if (pointBlocked(w.map, x + dx, y + dy, TF.BlockWalk)) return false;
+  }
+  return true;
+}
+
 function activate(w: World, room: number, by: number): void {
   const rs = w.rooms[room]!;
   rs.state = 1;
@@ -111,10 +135,22 @@ function activate(w: World, room: number, by: number): void {
     const ty = Math.floor(e.y[p.ent]! / TILE);
     if (tx >= r.x && ty >= r.y && tx < r.x + r.w && ty < r.y + r.h) continue;
     const leader = w.players[by]!;
-    e.x[p.ent] = e.x[leader.ent]! + 6;
-    e.y[p.ent] = e.y[leader.ent]!;
-    e.px[p.ent] = e.x[p.ent]!;
-    e.py[p.ent] = e.y[p.ent]!;
+    // Next to the leader, but never inside a wall or tree (the leader may be hugging one).
+    const lx = e.x[leader.ent]!;
+    const ly = e.y[leader.ent]!;
+    let nx = lx;
+    let ny = ly;
+    for (const [ox, oy] of PULL_OFFSETS) {
+      if (bodyFits(w, lx + ox, ly + oy, e.r[p.ent]!)) {
+        nx = lx + ox;
+        ny = ly + oy;
+        break;
+      }
+    }
+    e.x[p.ent] = nx;
+    e.y[p.ent] = ny;
+    e.px[p.ent] = nx;
+    e.py[p.ent] = ny;
   }
   w.events.push(Ev.DoorsClose, (r.x + r.w / 2) * TILE, (r.y + r.h / 2) * TILE, room);
   if (spawnWave(w, room, 0) === 0) clear(w, room);

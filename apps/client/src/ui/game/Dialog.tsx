@@ -27,7 +27,8 @@ export function DialogOverlay(props: {
     const t0 = performance.now();
     const id = setInterval(() => {
       const n = Math.floor(((performance.now() - t0) / 1000) * CHARS_PER_SEC);
-      setShown(Math.min(text.length, n));
+      // Never go backwards: a tap that already revealed the whole line must stick.
+      setShown((s) => Math.max(s, Math.min(text.length, n)));
       if (n >= text.length) clearInterval(id);
     }, 30);
     return () => clearInterval(id);

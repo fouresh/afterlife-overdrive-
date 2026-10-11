@@ -21,7 +21,7 @@ import {
   DAY_MS,
   type Material,
 } from './economy';
-import { itemBase, type ItemInstance } from './items';
+import { itemBase, itemValue, type ItemInstance } from './items';
 import { ATTRIBUTE_KEYS, CONTRACTS, ELIXIRS, addXp, type Attributes } from './progression';
 import type { PlayerSetup } from './player';
 import { STASH_SIZE, realmOf, type AccountSave, type Character, type Realm } from './save';
@@ -392,8 +392,12 @@ export function applyRunResult(
   if (carry.loadout) c.loadout = carry.loadout;
   c.potions = Math.min(MAX_CARRIED_POTIONS, carry.potions ?? 0);
   let gold = carry.gold ?? 0;
+  // Run loot goes to the front of the stash. A full stash never loses what is already in it:
+  // whatever does not fit is sold on the spot instead.
+  const room = Math.max(0, STASH_SIZE - r.stash.length);
   const toStash = carry.bag ?? [];
-  r.stash = [...toStash, ...r.stash].slice(0, STASH_SIZE);
+  r.stash = [...toStash.slice(0, room), ...r.stash];
+  for (const it of toStash.slice(room)) gold += itemValue(it);
   // Story: quests whose goal happened during the run (alive at the end).
   const quests = completeQuests(c, carry.story ?? []);
   let questXp = 0;

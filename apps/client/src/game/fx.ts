@@ -36,6 +36,8 @@ interface Anim {
   scale1: number;
   alpha0: number;
   follow: number;
+  /** Constant multiplier of the vertical scale (thin stabs); the sign keeps flipY. */
+  squash: number;
 }
 
 const MAX_PARTICLES = 320;
@@ -93,7 +95,16 @@ export class Fx {
       s.anchor.set(0.5);
       s.visible = false;
       this.layer.addChild(s);
-      this.anims.push({ s, life: 0, max: 1, scale0: 1, scale1: 1, alpha0: 1, follow: -1 });
+      this.anims.push({
+        s,
+        life: 0,
+        max: 1,
+        scale0: 1,
+        scale1: 1,
+        alpha0: 1,
+        follow: -1,
+        squash: 1,
+      });
     }
   }
 
@@ -184,6 +195,8 @@ export class Fx {
       alpha?: number;
       glow?: boolean;
       flipY?: boolean;
+      /** Vertical scale multiplier (default 1). */
+      squash?: number;
     },
   ): Sprite | undefined {
     const a = this.anims.find((m) => m.life <= 0);
@@ -198,7 +211,8 @@ export class Fx {
     a.scale1 = opts.scale1 ?? a.scale0;
     a.alpha0 = opts.alpha ?? 1;
     a.s.alpha = a.alpha0;
-    a.s.scale.set(a.scale0, a.scale0 * (opts.flipY ? -1 : 1));
+    a.squash = opts.squash ?? 1;
+    a.s.scale.set(a.scale0, a.scale0 * a.squash * (opts.flipY ? -1 : 1));
     a.s.visible = true;
     const parent = opts.glow ? this.glow : this.layer;
     if (a.s.parent !== parent) parent.addChild(a.s);
@@ -253,7 +267,7 @@ export class Fx {
       }
       const t = 1 - a.life / a.max;
       const sc = a.scale0 + (a.scale1 - a.scale0) * t;
-      a.s.scale.set(sc, sc * Math.sign(a.s.scale.y || 1));
+      a.s.scale.set(sc, sc * a.squash * Math.sign(a.s.scale.y || 1));
       a.s.alpha = a.alpha0 * (1 - t * t);
     }
   }

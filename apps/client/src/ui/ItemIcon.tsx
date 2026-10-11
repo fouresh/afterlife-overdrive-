@@ -21,7 +21,7 @@ export function ItemIcon(props: {
       data-testid={props.testid}
     >
       {item ? (
-        <img src={atlas.dataUrl(`item:${item.base}`, 0, 3)} alt="" />
+        <img src={atlas.dataUrl(`item:${item.base}`, 0, 2)} alt="" />
       ) : (
         <span class="itemicon__ph">{props.placeholder ?? ''}</span>
       )}
