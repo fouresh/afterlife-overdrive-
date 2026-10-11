@@ -41,7 +41,7 @@ export function validateFloor(f: DungeonFloor): string[] {
     if (!roomReach(ri, dist)) issues.push(`room ${ri} (${r.type}) unreachable`);
     // Every walkable cell of the room must be reachable (no sealed pockets → no softlock).
     for (let y = r.rect.y; y < r.rect.y + r.rect.h; y++) {
-      for (let x = r.rect.x; x < r.rect.x + r.rect.h && x < r.rect.x + r.rect.w; x++) {
+      for (let x = r.rect.x; x < r.rect.x + r.rect.w; x++) {
         const i = idx(x, y);
         if ((tiles[i] === Tile.Floor || tiles[i] === Tile.Door) && withKey[i]! < 0) {
           issues.push(`room ${ri} has an unreachable pocket at ${x},${y}`);
