@@ -2,9 +2,8 @@ import type { Appearance, EquipLook } from '../sprites/character';
 import { NPCS } from './npcs';
 
 /**
- * The personal hub ("Убежище" under the old chapel of Тихий Брод). Every station is an NPC
- * and/or an object; letters in HUB_MAP place them. Stations can require story flags: rescued NPCs
- * move in (Borgan → forge, Sai → market).
+ * The personal hub ("Убежище" under the old chapel of Тихий Брод). The layout is a broad,
+ * readable central plaza with three service nooks along each side and a clear route to the portal.
  */
 export interface HubStation {
   id: 'forge' | 'alchemist' | 'market' | 'stash' | 'altar' | 'board' | 'portal' | 'memorial';
@@ -47,21 +46,23 @@ export const HUB_STATIONS: HubStation[] = [
   { id: 'memorial', letter: 'L', nameKey: 'hub.memorial', object: 'hub.grave' },
 ];
 
-/** '#' wall, 'T' torch wall, 'P' pillar, '.' floor, '@' spawn, letters = stations. */
+/** '#': wall, 'T': torch wall, 'P': pillar, '.': floor, '@': spawn, letters: stations. */
 export const HUB_MAP = `
-##################################
-#T#####T#####T######T#####T#####T#
-#................................#
-#...A..........S............B....#
-#................................#
-#.......P..............P.........#
-#................................#
-#...F..........@............M....#
-#................................#
-#................................#
-#.......P..............P.........#
-#................................#
-#...C..........O............L....#
-#................................#
-##################################
+######################################
+#T####T####T####T####T####T####T####T#
+#....................................#
+#...A......P......S......P......B....#
+#....................................#
+#....................................#
+#..F....P........................M...#
+#....................................#
+#...............@....................#
+#....................................#
+#....................................#
+#..C....P........................L...#
+#....................................#
+#..................O.................#
+#....................................#
+#T####T####T####T####T####T####T####T#
+######################################
 `;
