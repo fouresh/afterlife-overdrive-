@@ -5,6 +5,21 @@ import { bfs } from './grid';
 import { Tile } from './tiles';
 
 describe('hub floor', () => {
+  it('keeps a broad central plaza and enough room around the spawn', () => {
+    const f = hubFloor({});
+    expect(f.w).toBeGreaterThanOrEqual(36);
+    expect(f.h).toBeGreaterThanOrEqual(15);
+    expect(f.tiles[f.start.y * f.w + f.start.x]).toBe(Tile.Floor);
+
+    const adjacent = [
+      (f.start.y - 1) * f.w + f.start.x,
+      (f.start.y + 1) * f.w + f.start.x,
+      f.start.y * f.w + f.start.x - 1,
+      f.start.y * f.w + f.start.x + 1,
+    ];
+    expect(adjacent.every((i) => f.tiles[i] === Tile.Floor)).toBe(true);
+  });
+
   it('places every station and keeps them reachable from the spawn', () => {
     const letters: Record<string, number> = {};
     HUB_STATIONS.forEach((s, i) => (letters[s.letter] = i));
