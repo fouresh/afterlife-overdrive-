@@ -38,18 +38,24 @@ const PAL: Record<string, string> = {
 const tile = (id: string, frames: Pix[], opts: { ox?: number; oy?: number } = {}): SpriteDef =>
   hd(id, PAL, frames, { ...opts, outline: false });
 
-/** One flagstone: speckled fill, lit top-left bevel, dark bottom-right bevel. */
+/**
+ * One flagstone: worn fill with soft mottling (clumps, not per-texel grain), a broken lit edge
+ * on top. Low contrast on purpose: the floor is a backdrop, sprites on top must read first.
+ */
 function slab(p: Pix, x: number, y: number, w: number, h: number, seed: number): void {
   for (let yy = y; yy < y + h; yy++) {
     for (let xx = x; xx < x + w; xx++) {
-      const n = hash01(xx, yy, seed);
-      p.set(xx, yy, n < 0.08 ? '2' : n > 0.95 ? '0' : '1');
+      // Coarse 4×4 clumps blended with fine grain → mottled stone.
+      const coarse = hash01(Math.floor(xx / 4), Math.floor(yy / 4), seed + 3);
+      const n = hash01(xx, yy, seed) * 0.35 + coarse * 0.65;
+      p.set(xx, yy, n > 0.8 ? '2' : n < 0.12 ? '0' : '1');
     }
   }
-  p.rect(x, y, w, 1, '2');
-  p.rect(x, y, 1, h, '2');
-  p.rect(x, y + h - 1, w, 1, '0');
-  p.rect(x + w - 1, y, 1, h, '0');
+  // Worn bevel: the lit top edge is chipped, the bottom edge sinks a little.
+  for (let xx = x; xx < x + w; xx++) {
+    if (hash01(xx, y, seed + 5) < 0.7) p.set(xx, y, '2');
+    if (hash01(xx, y + h, seed + 6) < 0.35) p.set(xx, y + h - 1, '0');
+  }
 }
 
 /** Grout grid + slabs. `cuts` = slab rectangles inside the tile (grout drawn between). */

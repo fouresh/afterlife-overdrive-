@@ -40,6 +40,7 @@ export function Hud({
     <div class="hud">
       <div class="hud__tl">
         <div class="hpbar" data-testid="hp">
+          <div class="hpbar__trail" style={{ width: `${hpPct}%` }} />
           <div class="hpbar__fill" style={{ width: `${hpPct}%` }} />
           {h.shield > 0 && <div class="hpbar__shield" style={{ width: `${shieldPct}%` }} />}
           <div class="hpbar__text">

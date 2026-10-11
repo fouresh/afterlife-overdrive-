@@ -8,10 +8,12 @@ const CI = !!process.env.CI;
  * which also serves the same build. WebGL runs on SwiftShader in headless Chromium.
  */
 const WORKER_URL = 'http://127.0.0.1:8787';
+// Software WebGL (SwiftShader) renders the HD canvas and the light map on the CPU: on a desktop
+// without GPU passthrough the screens tour alone takes ~2 min, so 90 s was too tight.
 const wrangler = 'pnpm --filter @ao/server exec wrangler';
 export default defineConfig({
   testDir: 'e2e',
-  timeout: 90_000,
+  timeout: 180_000,
   expect: { timeout: 15_000 },
   retries: CI ? 1 : 0,
   workers: CI ? 2 : undefined,
